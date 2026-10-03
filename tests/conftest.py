@@ -53,6 +53,8 @@ def _json_render(request, name, user, status_code=200, **extra):
         and getattr(extra["donor"], "code", None) is not None
     ):
         payload["donor_code"] = extra["donor"].code
+        payload["motility_total_pct"] = extra["donor"].motility_total_pct
+        payload["motility_progressive_pct"] = extra["donor"].motility_progressive_pct
     if "sentences" in extra:
         payload["sentences"] = [item.text for item in extra["sentences"]]
     if "drafts" in extra:

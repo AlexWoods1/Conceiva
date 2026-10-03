@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -83,6 +83,9 @@ class Donor(Base):
     id_release_policy: Mapped[str] = mapped_column(String(32), default="either")
     catalog_source_url: Mapped[str] = mapped_column(Text, default="")
     catalog_confirmed: Mapped[bool] = mapped_column(default=True)
+    motility_total_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    motility_progressive_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    motility_video_url: Mapped[str] = mapped_column(String(255), default="")
 
 
 class Carrier(Base):

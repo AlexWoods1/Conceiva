@@ -55,3 +55,13 @@ ID_RELEASE_PENALTY = 15
 CMV_PENALTY = 15
 CMV_UNKNOWN_PENALTY = 8
 QUARANTINE_PENALTY = 25
+
+# * WHO laboratory manual, 6th edition, lower reference limits -- for display
+# * alongside a motility result, not used in matching.
+WHO_PROGRESSIVE_MOTILITY_MIN_PCT = 30
+WHO_TOTAL_MOTILITY_MIN_PCT = 42
+MAX_MOTILITY_UPLOAD_BYTES = 200 * 1024 * 1024  # a 30s microscopy clip is a few MB
+MOTILITY_DISCLAIMER = (
+    "Research and education demo only. Not a diagnostic tool and does not "
+    "replace a clinical semen analysis."
+)
