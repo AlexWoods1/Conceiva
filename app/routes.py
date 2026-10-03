@@ -198,7 +198,27 @@ def _user(request: Request) -> User | None:
     user_id = request.session.get("user_id")
     if not user_id:
         return None
-    return _db(request).get(User, user_id)
+    user = _db(request).get(User, user_id)
+    if user is not None:
+        # * Rehydrate consent after Vercel /tmp SQLite reseeds wipe consent_at.
+        _sync_consent_from_session(request, user)
+    return user
+
+
+def _sync_consent_from_session(request: Request, user: User) -> None:
+    """Restore consent_at from the cookie session when the DB row lost it."""
+    if user.consent_at is not None:
+        if request.session.get("consent_ok") is not True:
+            request.session["consent_ok"] = True
+        return
+    if request.session.get("consent_ok") is True:
+        user.consent_at = datetime.now(timezone.utc)
+
+
+def _mark_consented(request: Request, user: User) -> None:
+    """Persist consent on the user row and in the session (survives /tmp reseeds)."""
+    user.consent_at = datetime.now(timezone.utc)
+    request.session["consent_ok"] = True
 
 
 def _require_user(request: Request) -> User:
@@ -423,7 +443,10 @@ async def login_submit(request: Request):
             error="Email or password does not match a record.",
         )
     request.session["user_id"] = user.id
-    if user.consent_at is None:
+    if user.consent_at is not None:
+        request.session["consent_ok"] = True
+    else:
+        request.session.pop("consent_ok", None)
         return _redirect("/consent")
     return _redirect(home_path_for(user))
 
@@ -456,6 +479,7 @@ async def register_submit(request: Request):
     db.commit()
     db.refresh(user)
     request.session["user_id"] = user.id
+    request.session.pop("consent_ok", None)
     return _redirect("/consent")
 
 
@@ -474,6 +498,8 @@ def consent_form(request: Request):
         user = _require_user(request)
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
+    if user.consent_at is not None:
+        return _redirect(home_path_for(user))
     return _render(request, "consent.html", user)
 
 
@@ -493,8 +519,7 @@ async def consent_submit(request: Request):
             status_code=400,
             error="Consent is required before genetic fields or a match score.",
         )
-    user.consent_at = datetime.now(timezone.utc)
-    _db(request).commit()
+    _mark_consented(request, user)
     return _redirect(home_path_for(user))
 
 
