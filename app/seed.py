@@ -61,6 +61,7 @@ def seed_demo(db: Session) -> None:
         email=DEMO_COUPLE_EMAIL,
         password_hash=hash_password(DEMO_COUPLE_PASSWORD),
         role="couple",
+        paid_at=datetime.now(timezone.utc),
     )
     counselor = User(
         email=DEMO_COUNSELOR_EMAIL,

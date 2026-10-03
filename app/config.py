@@ -41,6 +41,15 @@ class Settings:
     contact_email: str = "privacy@example.com"
     motility_service_url: str = "http://localhost:8010"
     motility_service_api_key: str = ""
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""
+    app_base_url: str = "http://127.0.0.1:8000"
+
+    @property
+    def stripe_enabled(self) -> bool:
+        """True when Checkout can run (secret key and price are set)."""
+        return bool(self.stripe_secret_key.strip() and self.stripe_price_id.strip())
 
 
 def load_settings() -> Settings:
@@ -80,4 +89,10 @@ def load_settings() -> Settings:
             "MOTILITY_SERVICE_URL", "http://localhost:8010"
         ).rstrip("/"),
         motility_service_api_key=os.environ.get("MOTILITY_SERVICE_API_KEY", ""),
+        stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", "").strip(),
+        stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip(),
+        stripe_price_id=os.environ.get("STRIPE_PRICE_ID", "").strip(),
+        app_base_url=os.environ.get("APP_BASE_URL", "http://127.0.0.1:8000").rstrip(
+            "/"
+        ),
     )

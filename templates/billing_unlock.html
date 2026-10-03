@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Unlock donor matches{% endblock %}
+{% block body %}
+<h1>Unlock donor matches</h1>
+<p>
+  A one-time payment unlocks your ranked donor list, donor details, and written explanations
+  for this couple account. Your history, carrier results, and survey answers stay free to fill in.
+  Card details are handled by Stripe and are not stored here.
+</p>
+<form method="post" action="/billing/checkout" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <button type="submit">Unlock donor matches</button>
+</form>
+{% endblock %}

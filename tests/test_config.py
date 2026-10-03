@@ -15,6 +15,10 @@ def test_load_settings_uses_defaults_when_environment_is_empty(monkeypatch):
     monkeypatch.delenv("SEED_ON_EMPTY", raising=False)
     monkeypatch.delenv("VERCEL", raising=False)
     monkeypatch.delenv("CONTACT_EMAIL", raising=False)
+    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("STRIPE_PRICE_ID", raising=False)
+    monkeypatch.delenv("APP_BASE_URL", raising=False)
 
     settings = load_settings()
 
@@ -26,6 +30,10 @@ def test_load_settings_uses_defaults_when_environment_is_empty(monkeypatch):
     assert settings.seed_on_empty is True
     assert settings.secure_cookies is False
     assert settings.contact_email == "privacy@example.com"
+    assert settings.stripe_secret_key == ""
+    assert settings.stripe_price_id == ""
+    assert settings.stripe_enabled is False
+    assert settings.app_base_url == "http://127.0.0.1:8000"
 
 
 def test_load_settings_reads_environment_overrides(monkeypatch, tmp_path):
@@ -62,6 +70,14 @@ def test_vercel_uses_temporary_storage_and_secure_cookies(monkeypatch):
 def test_blank_contact_email_falls_back(monkeypatch):
     monkeypatch.setenv("CONTACT_EMAIL", "  ")
     assert load_settings().contact_email == "privacy@example.com"
+
+
+def test_stripe_enabled_requires_secret_and_price(monkeypatch):
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test")
+    monkeypatch.delenv("STRIPE_PRICE_ID", raising=False)
+    assert load_settings().stripe_enabled is False
+    monkeypatch.setenv("STRIPE_PRICE_ID", "price_123")
+    assert load_settings().stripe_enabled is True
 
 
 def test_seed_flag_accepts_common_true_strings(monkeypatch):

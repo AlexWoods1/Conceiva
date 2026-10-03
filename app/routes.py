@@ -39,6 +39,12 @@ from app.constants import (
     ZYGOSITIES,
     ZYGOSITY_LABELS,
 )
+from app.billing import (
+    create_checkout_session,
+    handle_webhook_event,
+    parse_webhook_event,
+    retrieve_and_fulfill,
+)
 from app.llm import explain
 from app.models import (
     Appointment,
@@ -179,6 +185,15 @@ def _require_consent(request: Request, role: str) -> User:
         raise _RedirectNeeded(home_path_for(user))
     if user.consent_at is None:
         raise _RedirectNeeded("/consent")
+    return user
+
+
+def _require_match_access(request: Request) -> User:
+    """Require a consented couple account that has unlocked matching."""
+    user = _require_consent(request, "couple")
+    settings = request.app.state.settings
+    if settings.stripe_enabled and user.paid_at is None:
+        raise _RedirectNeeded("/billing/unlock")
     return user
 
 
@@ -709,7 +724,7 @@ async def preferences_submit(request: Request):
 def match_list(request: Request):
     """Ranked donor list. Medical conflicts render first on each row."""
     try:
-        user = _require_consent(request, "couple")
+        user = _require_match_access(request)
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
@@ -730,7 +745,7 @@ def match_list(request: Request):
 def match_detail(request: Request, donor_id: int):
     """One donor with an optional stored explanation."""
     try:
-        user = _require_consent(request, "couple")
+        user = _require_match_access(request)
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
@@ -755,7 +770,7 @@ async def match_explain(request: Request, donor_id: int):
     """Write a cited explanation from the record."""
     await _form(request)
     try:
-        user = _require_consent(request, "couple")
+        user = _require_match_access(request)
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
@@ -1657,3 +1672,83 @@ async def counselor_report_one(request: Request, appointment_id: int, donor_id: 
     db.commit()
     _flash(request, f"Report updated for {donor.code}.")
     return _redirect(f"/counselor/appointments/{appointment.id}")
+
+
+@router.get("/billing/unlock")
+def billing_unlock(request: Request):
+    """Paywall page for couple accounts that have not completed Checkout."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    if user.paid_at is not None or not request.app.state.settings.stripe_enabled:
+        return _redirect("/match")
+    return _render(request, "billing_unlock.html", user)
+
+
+@router.post("/billing/checkout")
+async def billing_checkout(request: Request):
+    """Start Stripe Checkout for a one-time matching unlock."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    settings = request.app.state.settings
+    if not settings.stripe_enabled:
+        _flash(request, "Billing is not configured on this deployment.")
+        return _redirect("/match")
+    if user.paid_at is not None:
+        return _redirect("/match")
+    try:
+        url = create_checkout_session(settings, user)
+    except Exception:
+        _flash(request, "Could not start Checkout. Try again in a moment.")
+        return _redirect("/billing/unlock")
+    return _redirect(url)
+
+
+@router.get("/billing/success")
+def billing_success(request: Request, session_id: str = ""):
+    """Return from Checkout; fulfill if the webhook has not landed yet."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    settings = request.app.state.settings
+    if session_id and settings.stripe_enabled and user.paid_at is None:
+        try:
+            retrieve_and_fulfill(settings, db, session_id)
+            db.commit()
+        except Exception:
+            db.rollback()
+    _flash(request, "Donor matches unlocked.")
+    return _redirect("/match")
+
+
+@router.get("/billing/cancel")
+def billing_cancel(request: Request):
+    """Return from an abandoned Checkout Session."""
+    try:
+        _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    _flash(request, "Checkout canceled. Donor matches stay locked until payment.")
+    return _redirect("/billing/unlock")
+
+
+@router.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events for matching unlocks."""
+    settings = request.app.state.settings
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    try:
+        event = parse_webhook_event(settings, payload, signature)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook.") from exc
+    db = _db(request)
+    handle_webhook_event(db, event)
+    db.commit()
+    return {"received": True}
