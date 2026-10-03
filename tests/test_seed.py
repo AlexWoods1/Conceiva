@@ -4,7 +4,13 @@ from sqlalchemy import select
 
 from app.models import Carrier, Donor, User
 from app.security import verify_password
-from app.seed import DEMO_BANK_EMAIL, DEMO_BANK_PASSWORD, DEMO_COUPLE_EMAIL, DEMO_COUPLE_PASSWORD, seed_demo
+from app.seed import (
+    DEMO_BANK_EMAIL,
+    DEMO_BANK_PASSWORD,
+    DEMO_COUPLE_EMAIL,
+    DEMO_COUPLE_PASSWORD,
+    seed_demo,
+)
 
 
 def test_seed_demo_inserts_logins_donors_and_carrier_rows(db):
@@ -29,7 +35,9 @@ def test_seed_demo_inserts_logins_donors_and_carrier_rows(db):
         "DN-520",
         "DN-630",
     ]
-    assert all(donor.bank_user_id == bank.id and donor.catalog_confirmed for donor in donors)
+    assert all(
+        donor.bank_user_id == bank.id and donor.catalog_confirmed for donor in donors
+    )
     assert {(row.gene, row.subject_id) for row in carriers} == {
         ("CFTR", donors[1].id),
         ("HBB", donors[3].id),

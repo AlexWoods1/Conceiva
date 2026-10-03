@@ -5,7 +5,15 @@ from sqlalchemy import func, select
 from app.config import Settings
 from app.llm import CitedSentence
 from app.matching import confirmed_genes
-from app.models import Carrier, CoupleProfile, CoupleSurvey, Donor, LlmLog, PriorHistory, User
+from app.models import (
+    Carrier,
+    CoupleProfile,
+    CoupleSurvey,
+    Donor,
+    LlmLog,
+    PriorHistory,
+    User,
+)
 from app.phenotype import resemblance_score
 from app.security import hash_password
 from app.services import (
@@ -81,7 +89,10 @@ def _donor(db, bank_id: int, code: str, **overrides) -> Donor:
 def test_get_or_create_rows_are_stable(db):
     user = _user(db, "couple@example.com")
 
-    assert get_or_create_profile(db, user.id).user_id == get_or_create_profile(db, user.id).user_id
+    assert (
+        get_or_create_profile(db, user.id).user_id
+        == get_or_create_profile(db, user.id).user_id
+    )
     assert get_or_create_history(db, user.id).prior_pregnancies == 0
     assert get_or_create_survey(db, user.id).cmv_requirement == "any"
     assert get_or_create_survey(db, user.id).preferences_done is False
@@ -91,9 +102,24 @@ def test_list_carriers_orders_by_gene(db):
     user = _user(db, "couple@example.com")
     db.add_all(
         [
-            Carrier(subject_type="couple", subject_id=user.id, gene="HBB", zygosity="heterozygous"),
-            Carrier(subject_type="couple", subject_id=user.id, gene="CFTR", zygosity="heterozygous"),
-            Carrier(subject_type="donor", subject_id=user.id, gene="CFTR", zygosity="unknown"),
+            Carrier(
+                subject_type="couple",
+                subject_id=user.id,
+                gene="HBB",
+                zygosity="heterozygous",
+            ),
+            Carrier(
+                subject_type="couple",
+                subject_id=user.id,
+                gene="CFTR",
+                zygosity="heterozygous",
+            ),
+            Carrier(
+                subject_type="donor",
+                subject_id=user.id,
+                gene="CFTR",
+                zygosity="unknown",
+            ),
         ]
     )
     db.commit()
@@ -193,8 +219,18 @@ def test_explanations_return_the_newest_log(db):
     donor = _donor(db, bank.id, "DN-1")
     assert latest_explanation(db, couple.id, donor.id) == []
 
-    store_explanation(db, couple.id, donor.id, [CitedSentence("First.", "donor.panel", "ACMG-SF", "record")])
-    store_explanation(db, couple.id, donor.id, [CitedSentence("Second.", "donor.panel", "ACMG-SF", "record")])
+    store_explanation(
+        db,
+        couple.id,
+        donor.id,
+        [CitedSentence("First.", "donor.panel", "ACMG-SF", "record")],
+    )
+    store_explanation(
+        db,
+        couple.id,
+        donor.id,
+        [CitedSentence("Second.", "donor.panel", "ACMG-SF", "record")],
+    )
     db.commit()
 
     assert latest_explanation(db, couple.id, donor.id)[0].text == "Second."
@@ -208,11 +244,35 @@ def test_delete_account_removes_only_that_accounts_records(db):
     get_or_create_history(db, couple.id)
     get_or_create_survey(db, couple.id)
     get_or_create_profile(db, other.id)
-    db.add(Carrier(subject_type="couple", subject_id=couple.id, gene="CFTR", zygosity="heterozygous"))
+    db.add(
+        Carrier(
+            subject_type="couple",
+            subject_id=couple.id,
+            gene="CFTR",
+            zygosity="heterozygous",
+        )
+    )
     donor = _donor(db, bank.id, "DN-1")
-    db.add(Carrier(subject_type="donor", subject_id=donor.id, gene="HBB", zygosity="heterozygous"))
-    store_explanation(db, couple.id, donor.id, [CitedSentence("Note.", "donor.panel", "ACMG-SF", "record")])
-    store_explanation(db, bank.id, donor.id, [CitedSentence("Bank.", "donor.panel", "ACMG-SF", "record")])
+    db.add(
+        Carrier(
+            subject_type="donor",
+            subject_id=donor.id,
+            gene="HBB",
+            zygosity="heterozygous",
+        )
+    )
+    store_explanation(
+        db,
+        couple.id,
+        donor.id,
+        [CitedSentence("Note.", "donor.panel", "ACMG-SF", "record")],
+    )
+    store_explanation(
+        db,
+        bank.id,
+        donor.id,
+        [CitedSentence("Bank.", "donor.panel", "ACMG-SF", "record")],
+    )
     db.commit()
     couple_id = couple.id
     other_id = other.id

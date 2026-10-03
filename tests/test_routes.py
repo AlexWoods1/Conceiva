@@ -65,7 +65,14 @@ def test_common_report_choice_sets_the_gene_code():
     assert (gene, zygosity, condition) == ("CFTR", "heterozygous", "Cystic fibrosis")
 
     with pytest.raises(ValueError, match="condition name"):
-        _carrier_fields({"example": "other", "zygosity": "heterozygous", "gene": "CFTR", "condition": ""})
+        _carrier_fields(
+            {
+                "example": "other",
+                "zygosity": "heterozygous",
+                "gene": "CFTR",
+                "condition": "",
+            }
+        )
 
 
 def test_drafts_from_session_keep_dicts_only():
@@ -96,7 +103,9 @@ def test_donor_draft_copies_catalog_fields():
 
 
 def test_donor_from_draft_normalizes_unsafe_or_unknown_values():
-    donor = _donor_from_draft(7, _draft(blood_type="Z", rh="maybe", cmv="nope"), 4, "https://example.com/c")
+    donor = _donor_from_draft(
+        7, _draft(blood_type="Z", rh="maybe", cmv="nope"), 4, "https://example.com/c"
+    )
 
     assert donor.bank_user_id == 7
     assert donor.blood_type == ""
@@ -106,7 +115,9 @@ def test_donor_from_draft_normalizes_unsafe_or_unknown_values():
     assert donor.catalog_source_url == "https://example.com/c"
     assert donor.catalog_confirmed is True
 
-    clamped = _donor_from_draft(7, _draft(code="", family_limit="99", quarantine="nope"), 0, "bundled-sample")
+    clamped = _donor_from_draft(
+        7, _draft(code="", family_limit="99", quarantine="nope"), 0, "bundled-sample"
+    )
     assert clamped.code == "CAT-1"
     assert clamped.family_limit == 25
     assert clamped.quarantine == "cleared"

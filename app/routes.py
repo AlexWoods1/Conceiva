@@ -56,7 +56,9 @@ from app.services import (
 )
 
 router = APIRouter()
-TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+TEMPLATES = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parent.parent / "templates")
+)
 TEMPLATES.env.globals.update(
     rh_labels=RH_LABELS,
     cmv_requirement_labels=CMV_REQUIREMENT_LABELS,
@@ -78,7 +80,9 @@ def _csrf(request: Request) -> str:
     return token
 
 
-def _render(request: Request, name: str, user: User | None, status_code: int = 200, **extra):
+def _render(
+    request: Request, name: str, user: User | None, status_code: int = 200, **extra
+):
     context = {
         "user": user,
         "csrf": _csrf(request),
@@ -193,7 +197,9 @@ def _carrier_fields(form) -> tuple[str, str, str]:
         return example, zygosity, known[example]
     condition = _clean_text(str(form.get("condition", "")), 255)
     if not condition:
-        raise ValueError("Enter the condition name from the report, such as cystic fibrosis.")
+        raise ValueError(
+            "Enter the condition name from the report, such as cystic fibrosis."
+        )
     return _gene(str(form.get("gene", ""))), zygosity, condition
 
 
@@ -331,7 +337,9 @@ async def register_submit(request: Request):
         error = "That email is already registered."
     if error:
         shown_role = role if role in ROLES else "couple"
-        return _render(request, "login.html", None, status_code=400, role=shown_role, error=error)
+        return _render(
+            request, "login.html", None, status_code=400, role=shown_role, error=error
+        )
     user = User(email=email, password_hash=hash_password(password), role=role)
     _db(request).add(user)
     _db(request).commit()
@@ -443,12 +451,20 @@ async def history_submit(request: Request):
     profile = get_or_create_profile(db, user.id)
     history = get_or_create_history(db, user.id)
     try:
-        profile.blood_type = _choice(str(form.get("blood_type", "")), BLOOD_TYPES, "blood type")
+        profile.blood_type = _choice(
+            str(form.get("blood_type", "")), BLOOD_TYPES, "blood type"
+        )
         profile.rh = _choice(str(form.get("rh", "")), RH_VALUES, "Rh status")
-        history.prior_pregnancies = _bounded_int(str(form.get("prior_pregnancies", "0")), "Prior pregnancies", 0, 30)
-        history.miscarriages = _bounded_int(str(form.get("miscarriages", "0")), "Miscarriages", 0, 30)
+        history.prior_pregnancies = _bounded_int(
+            str(form.get("prior_pregnancies", "0")), "Prior pregnancies", 0, 30
+        )
+        history.miscarriages = _bounded_int(
+            str(form.get("miscarriages", "0")), "Miscarriages", 0, 30
+        )
         history.prior_donors = _clean_text(str(form.get("prior_donors", "")), 500)
-        history.known_conditions = _clean_text(str(form.get("known_conditions", "")), 500)
+        history.known_conditions = _clean_text(
+            str(form.get("known_conditions", "")), 500
+        )
         if request.app.state.settings.enable_face_compare:
             adult = str(form.get("adult_photo_key", ""))
             profile.adult_photo_key = adult if adult in ADULT_PHOTO_KEYS else ""
@@ -568,7 +584,9 @@ async def clinical_submit(request: Request):
     db = _db(request)
     survey = get_or_create_survey(db, user.id)
     try:
-        survey.cmv_requirement = _choice(str(form.get("cmv_requirement", "")), CMV_REQUIREMENTS, "CMV requirement")
+        survey.cmv_requirement = _choice(
+            str(form.get("cmv_requirement", "")), CMV_REQUIREMENTS, "CMV requirement"
+        )
         survey.ancestry = _clean_text(str(form.get("ancestry", "")), 255)
         survey.clinical_notes = _clean_text(str(form.get("clinical_notes", "")), 1000)
         survey.clinical_done = True
@@ -614,8 +632,12 @@ async def preferences_submit(request: Request):
     db = _db(request)
     survey = get_or_create_survey(db, user.id)
     try:
-        survey.id_release = _choice(str(form.get("id_release", "")), ID_RELEASE, "ID-release preference")
-        survey.family_limit = _bounded_int(str(form.get("family_limit", "")), "Family limit", 1, 25)
+        survey.id_release = _choice(
+            str(form.get("id_release", "")), ID_RELEASE, "ID-release preference"
+        )
+        survey.family_limit = _bounded_int(
+            str(form.get("family_limit", "")), "Family limit", 1, 25
+        )
         survey.preferences_done = True
     except ValueError as exc:
         return _render(
@@ -653,7 +675,9 @@ def match_detail(request: Request, donor_id: int):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
-    found = find_ranked_donor(ranked_matches(db, user, request.app.state.settings), donor_id)
+    found = find_ranked_donor(
+        ranked_matches(db, user, request.app.state.settings), donor_id
+    )
     if found is None:
         raise HTTPException(status_code=404, detail="Donor not found.")
     donor, result = found
@@ -676,7 +700,9 @@ async def match_explain(request: Request, donor_id: int):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
-    found = find_ranked_donor(ranked_matches(db, user, request.app.state.settings), donor_id)
+    found = find_ranked_donor(
+        ranked_matches(db, user, request.app.state.settings), donor_id
+    )
     if found is None:
         raise HTTPException(status_code=404, detail="Donor not found.")
     donor, result = found
@@ -695,13 +721,25 @@ def bank_home(request: Request):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     donors = list(
-        _db(request).scalars(select(Donor).where(Donor.bank_user_id == user.id).order_by(Donor.code))
+        _db(request).scalars(
+            select(Donor).where(Donor.bank_user_id == user.id).order_by(Donor.code)
+        )
     )
     return _render(request, "bank.html", user, donors=donors)
 
 
-def _donor_page(request: Request, user: User, donor: Donor | None, error: str = "", status_code: int = 200):
-    carriers = [] if donor is None or donor.id is None else list_carriers(_db(request), "donor", donor.id)
+def _donor_page(
+    request: Request,
+    user: User,
+    donor: Donor | None,
+    error: str = "",
+    status_code: int = 200,
+):
+    carriers = (
+        []
+        if donor is None or donor.id is None
+        else list_carriers(_db(request), "donor", donor.id)
+    )
     return _render(
         request,
         "donor_form.html",
@@ -724,15 +762,25 @@ def _apply_donor_form(donor: Donor, form) -> None:
     donor.code = _clean_text(str(form.get("code", "")), 64)
     if not donor.code:
         raise ValueError("Enter a donor code.")
-    donor.blood_type = _choice(str(form.get("blood_type", "")), BLOOD_TYPES, "blood type")
+    donor.blood_type = _choice(
+        str(form.get("blood_type", "")), BLOOD_TYPES, "blood type"
+    )
     donor.rh = _choice(str(form.get("rh", "")), RH_VALUES, "Rh status")
     donor.ancestry = _clean_text(str(form.get("ancestry", "")), 255)
-    donor.photo_key = _choice(str(form.get("photo_key", "")), PHOTO_KEYS, "synthetic portrait")
+    donor.photo_key = _choice(
+        str(form.get("photo_key", "")), PHOTO_KEYS, "synthetic portrait"
+    )
     donor.panel = _clean_text(str(form.get("panel", "")), 128)
     donor.cmv = _choice(str(form.get("cmv", "")), CMV_STATUS, "CMV status")
-    donor.quarantine = _choice(str(form.get("quarantine", "")), QUARANTINE, "quarantine status")
-    donor.family_limit = _bounded_int(str(form.get("family_limit", "")), "Family limit", 1, 25)
-    donor.id_release_policy = _choice(str(form.get("id_release_policy", "")), ID_RELEASE, "ID-release policy")
+    donor.quarantine = _choice(
+        str(form.get("quarantine", "")), QUARANTINE, "quarantine status"
+    )
+    donor.family_limit = _bounded_int(
+        str(form.get("family_limit", "")), "Family limit", 1, 25
+    )
+    donor.id_release_policy = _choice(
+        str(form.get("id_release_policy", "")), ID_RELEASE, "ID-release policy"
+    )
     donor.catalog_confirmed = True
 
 
@@ -876,7 +924,9 @@ def catalog_form(request: Request):
         user = _require_consent(request, "bank")
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
-    return _render(request, "catalog.html", user, drafts=_drafts_from_session(request), error="")
+    return _render(
+        request, "catalog.html", user, drafts=_drafts_from_session(request), error=""
+    )
 
 
 @router.post("/bank/catalog/sample")
@@ -888,7 +938,9 @@ async def catalog_sample(request: Request):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     html = FIXTURE_CATALOG.read_text(encoding="utf-8")
-    request.session["catalog_draft"] = [_donor_draft(row) for row in parse_catalog(html)]
+    request.session["catalog_draft"] = [
+        _donor_draft(row) for row in parse_catalog(html)
+    ]
     request.session["catalog_source"] = "bundled-sample"
     _flash(request, "Sample catalog parsed. Confirm the fields before they are saved.")
     return _redirect("/bank/catalog")
@@ -976,7 +1028,9 @@ def _donor_draft(row: CatalogDonor) -> dict[str, str]:
     }
 
 
-def _donor_from_draft(bank_user_id: int, draft: dict[str, str], index: int, source: str) -> Donor:
+def _donor_from_draft(
+    bank_user_id: int, draft: dict[str, str], index: int, source: str
+) -> Donor:
     blood = draft.get("blood_type", "")
     rh = draft.get("rh", "")
     cmv = draft.get("cmv", "")

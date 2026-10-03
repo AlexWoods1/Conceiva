@@ -22,7 +22,9 @@ def hash_password(password: str) -> str:
         Salt and digest joined by ``$``.
     """
     salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS
+    )
     return f"{salt.hex()}${digest.hex()}"
 
 
@@ -41,7 +43,9 @@ def verify_password(password: str, stored: str) -> bool:
         salt = bytes.fromhex(salt_hex)
     except ValueError:
         return False
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS
+    )
     return hmac.compare_digest(digest.hex(), digest_hex)
 
 

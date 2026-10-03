@@ -48,7 +48,10 @@ def _json_render(request, name, user, status_code=200, **extra):
             {"code": donor.code, "score": result.score, "hard_stop": result.hard_stop}
             for donor, result in extra["rows"]
         ]
-    if extra.get("donor") is not None and getattr(extra["donor"], "code", None) is not None:
+    if (
+        extra.get("donor") is not None
+        and getattr(extra["donor"], "code", None) is not None
+    ):
         payload["donor_code"] = extra["donor"].code
     if "sentences" in extra:
         payload["sentences"] = [item.text for item in extra["sentences"]]
