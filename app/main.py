@@ -32,15 +32,14 @@ def _ensure_sqlite_columns(engine) -> None:
     """Add missing donor columns after model changes on an existing SQLite file."""
     with engine.begin() as conn:
         existing = {
-            row[1] for row in conn.exec_driver_sql("PRAGMA table_info(donors)").fetchall()
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(donors)").fetchall()
         }
         if not existing:
             return
         for name, sql_type in _DONOR_COLUMN_DDL:
             if name not in existing:
-                conn.exec_driver_sql(
-                    f"ALTER TABLE donors ADD COLUMN {name} {sql_type}"
-                )
+                conn.exec_driver_sql(f"ALTER TABLE donors ADD COLUMN {name} {sql_type}")
 
 
 def _appointments_slot_id_is_unique(conn) -> bool:
@@ -74,8 +73,7 @@ def _ensure_appointments_slot_reusable(engine) -> None:
         if not _appointments_slot_id_is_unique(conn):
             return
         conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
-        conn.exec_driver_sql(
-            """
+        conn.exec_driver_sql("""
             CREATE TABLE appointments_new (
                 id INTEGER NOT NULL PRIMARY KEY,
                 couple_user_id INTEGER NOT NULL,
@@ -87,16 +85,13 @@ def _ensure_appointments_slot_reusable(engine) -> None:
                 FOREIGN KEY(counselor_user_id) REFERENCES users (id),
                 FOREIGN KEY(slot_id) REFERENCES availability_slots (id)
             )
-            """
-        )
-        conn.exec_driver_sql(
-            """
+            """)
+        conn.exec_driver_sql("""
             INSERT INTO appointments_new
             (id, couple_user_id, counselor_user_id, slot_id, status, created_at)
             SELECT id, couple_user_id, counselor_user_id, slot_id, status, created_at
             FROM appointments
-            """
-        )
+            """)
         conn.exec_driver_sql("DROP TABLE appointments")
         conn.exec_driver_sql("ALTER TABLE appointments_new RENAME TO appointments")
         conn.exec_driver_sql(

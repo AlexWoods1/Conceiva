@@ -65,9 +65,7 @@ def test_appointments_slot_unique_is_dropped_on_startup(tmp_path):
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
         conn.execute(text("CREATE TABLE availability_slots (id INTEGER PRIMARY KEY)"))
-        conn.execute(
-            text(
-                """
+        conn.execute(text("""
                 CREATE TABLE appointments (
                     id INTEGER PRIMARY KEY,
                     couple_user_id INTEGER NOT NULL,
@@ -76,19 +74,15 @@ def test_appointments_slot_unique_is_dropped_on_startup(tmp_path):
                     status VARCHAR(32) NOT NULL,
                     created_at DATETIME NOT NULL
                 )
-                """
-            )
-        )
+                """))
         conn.execute(text("INSERT INTO users (id) VALUES (1), (2)"))
         conn.execute(text("INSERT INTO availability_slots (id) VALUES (1)"))
         conn.execute(
-            text(
-                """
+            text("""
                 INSERT INTO appointments
                 (id, couple_user_id, counselor_user_id, slot_id, status, created_at)
                 VALUES (1, 1, 2, 1, 'cancelled', :created)
-                """
-            ),
+                """),
             {"created": datetime.now(timezone.utc).isoformat()},
         )
     with engine.begin() as conn:
@@ -97,13 +91,11 @@ def test_appointments_slot_unique_is_dropped_on_startup(tmp_path):
     with engine.begin() as conn:
         assert _appointments_slot_id_is_unique(conn) is False
         conn.execute(
-            text(
-                """
+            text("""
                 INSERT INTO appointments
                 (id, couple_user_id, counselor_user_id, slot_id, status, created_at)
                 VALUES (2, 1, 2, 1, 'booked', :created)
-                """
-            ),
+                """),
             {"created": datetime.now(timezone.utc).isoformat()},
         )
     engine.dispose()

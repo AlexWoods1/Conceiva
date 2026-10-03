@@ -338,14 +338,14 @@ def booked_slot_ids(db: Session) -> set[int]:
     """Return slot ids held by a still-booked appointment."""
     return set(
         db.scalars(
-            select(Appointment.slot_id).where(
-                Appointment.status == APPOINTMENT_BOOKED
-            )
+            select(Appointment.slot_id).where(Appointment.status == APPOINTMENT_BOOKED)
         )
     )
 
 
-def open_future_slots(db: Session, now: datetime | None = None) -> list[AvailabilitySlot]:
+def open_future_slots(
+    db: Session, now: datetime | None = None
+) -> list[AvailabilitySlot]:
     """List future slots that are not yet booked.
 
     Args:
@@ -403,7 +403,9 @@ def counselors_with_open_slots(
     return rows
 
 
-def slot_is_open(db: Session, slot: AvailabilitySlot, now: datetime | None = None) -> bool:
+def slot_is_open(
+    db: Session, slot: AvailabilitySlot, now: datetime | None = None
+) -> bool:
     """Return True when the slot is in the future and has no booked appointment."""
     clock = _as_utc(now or datetime.now(timezone.utc))
     if _as_utc(slot.starts_at) < clock:
@@ -451,9 +453,7 @@ def book_appointment(
     db.add(appointment)
     db.flush()
     for item in items:
-        db.add(
-            AppointmentDonor(appointment_id=appointment.id, donor_id=item.donor_id)
-        )
+        db.add(AppointmentDonor(appointment_id=appointment.id, donor_id=item.donor_id))
     return appointment
 
 
@@ -616,9 +616,7 @@ def delete_account(db: Session, user: User) -> None:
             )
         )
         delete_appointment_tree(db, appointment_ids)
-        db.execute(
-            delete(ShortlistItem).where(ShortlistItem.couple_user_id == user.id)
-        )
+        db.execute(delete(ShortlistItem).where(ShortlistItem.couple_user_id == user.id))
         db.execute(
             delete(Carrier).where(
                 Carrier.subject_type == "couple", Carrier.subject_id == user.id
@@ -639,9 +637,7 @@ def delete_account(db: Session, user: User) -> None:
                 AvailabilitySlot.counselor_user_id == user.id
             )
         )
-        db.execute(
-            delete(CounselorProfile).where(CounselorProfile.user_id == user.id)
-        )
+        db.execute(delete(CounselorProfile).where(CounselorProfile.user_id == user.id))
     else:
         donor_ids = list(
             db.scalars(select(Donor.id).where(Donor.bank_user_id == user.id))

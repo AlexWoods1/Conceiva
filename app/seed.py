@@ -69,9 +69,7 @@ def seed_demo(db: Session) -> None:
     )
     db.add_all([bank, couple, counselor])
     db.flush()
-    db.add(
-        CounselorProfile(user_id=counselor.id, display_name=DEMO_COUNSELOR_NAME)
-    )
+    db.add(CounselorProfile(user_id=counselor.id, display_name=DEMO_COUNSELOR_NAME))
 
     # * Fixed offsets from "now" so the book page always has open future slots.
     # * Store naive UTC; SQLite does not keep tzinfo reliably.

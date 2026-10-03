@@ -373,7 +373,11 @@ def build_counselor_packet(
             "match.hard_stop",
             "yes" if result.hard_stop else "no",
             "Hard stop for this pair: "
-            + ("yes, a carrier conflict blocks this candidate." if result.hard_stop else "no."),
+            + (
+                "yes, a carrier conflict blocks this candidate."
+                if result.hard_stop
+                else "no."
+            ),
             "record",
         )
     )

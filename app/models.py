@@ -147,7 +147,9 @@ class ShortlistItem(Base):
 
     __tablename__ = "shortlist_items"
     __table_args__ = (
-        UniqueConstraint("couple_user_id", "donor_id", name="uq_shortlist_couple_donor"),
+        UniqueConstraint(
+            "couple_user_id", "donor_id", name="uq_shortlist_couple_donor"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -174,7 +176,9 @@ class Appointment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     couple_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     counselor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    slot_id: Mapped[int] = mapped_column(ForeignKey("availability_slots.id"), index=True)
+    slot_id: Mapped[int] = mapped_column(
+        ForeignKey("availability_slots.id"), index=True
+    )
     status: Mapped[str] = mapped_column(String(32), default="booked")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -184,9 +188,7 @@ class AppointmentDonor(Base):
 
     __tablename__ = "appointment_donors"
     __table_args__ = (
-        UniqueConstraint(
-            "appointment_id", "donor_id", name="uq_appointment_donor"
-        ),
+        UniqueConstraint("appointment_id", "donor_id", name="uq_appointment_donor"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -201,9 +203,7 @@ class CandidateReport(Base):
 
     __tablename__ = "candidate_reports"
     __table_args__ = (
-        UniqueConstraint(
-            "appointment_id", "donor_id", name="uq_candidate_report"
-        ),
+        UniqueConstraint("appointment_id", "donor_id", name="uq_candidate_report"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

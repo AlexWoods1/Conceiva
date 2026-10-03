@@ -415,9 +415,10 @@ def test_couple_can_cancel_appointment_and_frees_slot(api):
 
     again = api.post(f"/couple/appointments/{appointment_id}/cancel")
     assert again.status_code == 303
-    assert "already cancelled" in api.get(
-        f"/couple/appointments/{appointment_id}"
-    ).json()["flash"]
+    assert (
+        "already cancelled"
+        in api.get(f"/couple/appointments/{appointment_id}").json()["flash"]
+    )
 
 
 def test_counselor_can_cancel_appointment(api):
@@ -437,6 +438,7 @@ def test_counselor_can_cancel_appointment(api):
         db.close()
     blocked = api.post(f"/counselor/appointments/{appointment_id}/report")
     assert blocked.status_code == 303
-    assert "Cancelled visits" in api.get(
-        f"/counselor/appointments/{appointment_id}"
-    ).json()["flash"]
+    assert (
+        "Cancelled visits"
+        in api.get(f"/counselor/appointments/{appointment_id}").json()["flash"]
+    )
