@@ -27,11 +27,13 @@ def test_seed_demo_inserts_logins_donors_and_carrier_rows(db):
     carriers = list(db.scalars(select(Carrier)))
 
     assert couple.role == "couple"
-    assert couple.consent_at is None
+    assert couple.consent_at is not None
     assert verify_password(DEMO_COUPLE_PASSWORD, couple.password_hash)
     assert bank.role == "bank"
+    assert bank.consent_at is not None
     assert verify_password(DEMO_BANK_PASSWORD, bank.password_hash)
     assert counselor.role == "counselor"
+    assert counselor.consent_at is not None
     assert verify_password(DEMO_COUNSELOR_PASSWORD, counselor.password_hash)
     assert [donor.code for donor in donors] == [
         "DN-100",

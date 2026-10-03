@@ -125,6 +125,15 @@ def _backfill_demo_motility(db: Session) -> None:
         donor_310.motility_below_reference = True
 
 
+def _backfill_demo_consent(db: Session) -> None:
+    """Grant consent on demo logins so cold starts do not re-open the gate."""
+    now = datetime.now(timezone.utc)
+    for email in (DEMO_BANK_EMAIL, DEMO_COUPLE_EMAIL, DEMO_COUNSELOR_EMAIL):
+        user = db.scalars(select(User).where(User.email == email)).first()
+        if user is not None and user.consent_at is None:
+            user.consent_at = now
+
+
 def seed_demo(db: Session) -> None:
     """Insert the demo bank, donors, couple, counselor, and open slots.
 
@@ -139,23 +148,29 @@ def seed_demo(db: Session) -> None:
     existing = db.scalars(select(User).where(User.email == DEMO_BANK_EMAIL)).first()
     if existing is not None:
         _backfill_demo_motility(db)
+        _backfill_demo_consent(db)
         return
 
+    # * Pre-consent demo logins so Vercel /tmp reseeds do not re-open the gate.
+    consented = datetime.now(timezone.utc)
     bank = User(
         email=DEMO_BANK_EMAIL,
         password_hash=hash_password(DEMO_BANK_PASSWORD),
         role="bank",
+        consent_at=consented,
     )
     couple = User(
         email=DEMO_COUPLE_EMAIL,
         password_hash=hash_password(DEMO_COUPLE_PASSWORD),
         role="couple",
         paid_at=datetime.now(timezone.utc),
+        consent_at=consented,
     )
     counselor = User(
         email=DEMO_COUNSELOR_EMAIL,
         password_hash=hash_password(DEMO_COUNSELOR_PASSWORD),
         role="counselor",
+        consent_at=consented,
     )
     db.add_all([bank, couple, counselor])
     db.flush()

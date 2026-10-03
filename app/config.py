@@ -79,11 +79,21 @@ def load_settings() -> Settings:
             "SESSION_SECRET must be set to a non-default value on Vercel."
         )
     contact_email = os.environ.get("CONTACT_EMAIL", "privacy@example.com").strip()
-    if "MOTILITY_UPLOADS_ENABLED" in os.environ:
-        motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "false")
-    else:
-        # * Real analyze needs the long-lived motility backend (not Vercel).
-        motility_uploads_enabled = not on_vercel
+    # * Form stays on unless explicitly disabled. Analyze still needs a reachable
+    # * motility backend (local :8010 or a public MOTILITY_SERVICE_URL).
+    motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "true")
+    motility_service_url = os.environ.get(
+        "MOTILITY_SERVICE_URL", "http://localhost:8010"
+    ).rstrip("/")
+    if (
+        on_vercel
+        and motility_uploads_enabled
+        and _is_loopback_url(motility_service_url)
+    ):
+        raise RuntimeError(
+            "On Vercel, set MOTILITY_SERVICE_URL to the public EC2 motility "
+            "host (not localhost), or set MOTILITY_UPLOADS_ENABLED=false."
+        )
     return Settings(
         database_path=database_path,
         session_secret=session_secret,
@@ -96,9 +106,7 @@ def load_settings() -> Settings:
         seed_on_empty=_as_bool("SEED_ON_EMPTY", "true"),
         secure_cookies=on_vercel,
         contact_email=contact_email or "privacy@example.com",
-        motility_service_url=os.environ.get(
-            "MOTILITY_SERVICE_URL", "http://localhost:8010"
-        ).rstrip("/"),
+        motility_service_url=motility_service_url,
         motility_service_api_key=os.environ.get("MOTILITY_SERVICE_API_KEY", ""),
         motility_uploads_enabled=motility_uploads_enabled,
         stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", "").strip(),
@@ -108,3 +116,9 @@ def load_settings() -> Settings:
             "/"
         ),
     )
+
+
+def _is_loopback_url(url: str) -> bool:
+    """True when the motility URL still points at this machine."""
+    lowered = url.lower()
+    return "localhost" in lowered or "127.0.0.1" in lowered

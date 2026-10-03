@@ -42,7 +42,7 @@ def test_empty_database_is_seeded_once(make_app, tmp_path):
     assert verify_password(DEMO_COUPLE_PASSWORD, couple.password_hash)
     assert verify_password(DEMO_BANK_PASSWORD, bank.password_hash)
     assert counselor.role == "counselor"
-    assert couple.consent_at is None
+    assert couple.consent_at is not None
     assert couple.paid_at is not None
     assert bank.paid_at is None
 

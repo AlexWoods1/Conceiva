@@ -4,6 +4,7 @@ and renders an annotated clip with ID labels and motion trails.
 
 import argparse
 import json
+import shutil
 import subprocess
 from collections import defaultdict, deque
 from pathlib import Path
@@ -24,6 +25,21 @@ CATEGORY_COLORS = {
     "immotile": (0, 0, 230),
 }
 UNCLASSIFIED_COLOR = (170, 170, 170)
+
+
+def _ffmpeg_bin() -> str:
+    """Resolve ffmpeg: system PATH first, then the imageio-ffmpeg wheel."""
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    try:
+        import imageio_ffmpeg
+    except ImportError as exc:
+        raise FileNotFoundError(
+            "ffmpeg not found. Install system ffmpeg or: "
+            "uv pip install imageio-ffmpeg --group motility"
+        ) from exc
+    return imageio_ffmpeg.get_ffmpeg_exe()
 
 
 def running_category(points, fps):
@@ -186,10 +202,11 @@ def track_video(video_path, out_csv, out_video, model=None):
     )
     print(f"wrote {len(rows)} detections across tracks to {out_csv}")
 
-    # mp4v (OpenCV's default) doesn't play in browsers, re-encode to H.264.
+    # * mp4v (OpenCV's default) doesn't play in browsers; re-encode to H.264.
+    ffmpeg_bin = _ffmpeg_bin()
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_bin,
             "-y",
             "-i",
             str(raw_video),

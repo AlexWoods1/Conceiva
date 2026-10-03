@@ -62,6 +62,7 @@ def test_load_settings_reads_environment_overrides(monkeypatch, tmp_path):
 def test_vercel_uses_temporary_storage_and_secure_cookies(monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.setenv("SESSION_SECRET", "vercel-secret")
+    monkeypatch.setenv("MOTILITY_SERVICE_URL", "http://203.0.113.10:8010")
     monkeypatch.delenv("DATABASE_PATH", raising=False)
     monkeypatch.delenv("MOTILITY_UPLOADS_ENABLED", raising=False)
     monkeypatch.setenv("CONTACT_EMAIL", "desk@example.com")
@@ -71,14 +72,38 @@ def test_vercel_uses_temporary_storage_and_secure_cookies(monkeypatch):
     assert settings.database_path == Path("/tmp/donor-match.db")
     assert settings.secure_cookies is True
     assert settings.contact_email == "desk@example.com"
-    assert settings.motility_uploads_enabled is False
+    assert settings.motility_uploads_enabled is True
+
+
+def test_motility_uploads_can_be_disabled_explicitly(monkeypatch):
+    monkeypatch.setenv("MOTILITY_UPLOADS_ENABLED", "false")
+    assert load_settings().motility_uploads_enabled is False
 
 
 def test_vercel_rejects_default_session_secret(monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.delenv("SESSION_SECRET", raising=False)
+    monkeypatch.setenv("MOTILITY_UPLOADS_ENABLED", "false")
     with pytest.raises(RuntimeError, match="SESSION_SECRET"):
         load_settings()
+
+
+def test_vercel_rejects_loopback_motility_url_when_uploads_on(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("SESSION_SECRET", "vercel-secret")
+    monkeypatch.delenv("MOTILITY_SERVICE_URL", raising=False)
+    monkeypatch.setenv("MOTILITY_UPLOADS_ENABLED", "true")
+    with pytest.raises(RuntimeError, match="MOTILITY_SERVICE_URL"):
+        load_settings()
+
+
+def test_vercel_allows_loopback_when_uploads_disabled(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("SESSION_SECRET", "vercel-secret")
+    monkeypatch.delenv("MOTILITY_SERVICE_URL", raising=False)
+    monkeypatch.setenv("MOTILITY_UPLOADS_ENABLED", "false")
+    settings = load_settings()
+    assert settings.motility_uploads_enabled is False
 
 
 def test_blank_contact_email_falls_back(monkeypatch):

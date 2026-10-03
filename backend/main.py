@@ -35,6 +35,9 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # Local dev opts in explicitly instead of relying on an absent key.
 API_KEY = os.environ.get("MOTILITY_SERVICE_API_KEY", "")
 DEV_MODE = os.environ.get("MOTILITY_SERVICE_DEV", "").lower() in {"1", "true", "yes"}
+# * Public EC2/demo host. Prefixed onto annotated video paths so Vercel stores
+# * a reachable absolute URL (relative /videos/... only works on this process).
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 if not API_KEY and not DEV_MODE:
     logger.warning(
         "MOTILITY_SERVICE_API_KEY is not set and MOTILITY_SERVICE_DEV is not "
@@ -124,9 +127,12 @@ async def analyze(video: UploadFile):
         raise
 
     annotated_name = Path(result["annotated_video_path"]).name
+    video_path = f"/videos/{request_id}/{annotated_name}"
+    if PUBLIC_BASE_URL:
+        video_path = f"{PUBLIC_BASE_URL}{video_path}"
     return {
         "summary": result["summary"],
-        "annotated_video_url": f"/videos/{request_id}/{annotated_name}",
+        "annotated_video_url": video_path,
         "who_reference": result["who_reference"],
         "disclaimer": result["disclaimer"],
     }

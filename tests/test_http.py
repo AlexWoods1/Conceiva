@@ -173,6 +173,25 @@ def test_role_and_consent_guards(api):
     assert api.get("/bank").headers["location"] == "/consent"
 
 
+def test_consent_survives_ephemeral_db_wipe_via_session(api):
+    """Vercel /tmp can reseed and clear consent_at; the session must keep access."""
+    _consent(api, "person@example.com")
+    assert api.get("/couple/history").status_code == 200
+
+    db = api.session()
+    try:
+        user = db.scalars(select(User).where(User.email == "person@example.com")).one()
+        user.consent_at = None
+        db.commit()
+    finally:
+        db.close()
+
+    # * Session still has consent_ok; page must not bounce back to /consent.
+    again = api.get("/couple/history")
+    assert again.status_code == 200
+    assert again.headers.get("location") != "/consent"
+
+
 def test_account_delete_requires_confirmation(api):
     _consent(api, "person@example.com")
     page = api.get("/account")
