@@ -22,17 +22,21 @@ from app.constants import (
     CMV_STATUS_LABELS,
     ID_RELEASE,
     ID_RELEASE_LABELS,
+    MOTILITY_DISCLAIMER,
     PHOTO_KEYS,
     QUARANTINE,
     QUARANTINE_LABELS,
     RH_LABELS,
     RH_VALUES,
     ROLES,
+    WHO_PROGRESSIVE_MOTILITY_MIN_PCT,
+    WHO_TOTAL_MOTILITY_MIN_PCT,
     ZYGOSITIES,
     ZYGOSITY_LABELS,
 )
 from app.llm import explain
 from app.models import Carrier, ContactMessage, Donor, User
+from app.motility_client import analyze_donor_video
 from app.scrape import CatalogDonor, fetch_catalog_html, parse_catalog
 from app.security import hash_password, verify_password
 from app.seed import (
@@ -755,6 +759,9 @@ def _donor_page(
         quarantine=QUARANTINE,
         id_release=ID_RELEASE,
         zygosities=ZYGOSITIES,
+        who_progressive_min=WHO_PROGRESSIVE_MOTILITY_MIN_PCT,
+        who_total_min=WHO_TOTAL_MOTILITY_MIN_PCT,
+        motility_disclaimer=MOTILITY_DISCLAIMER,
     )
 
 
@@ -882,6 +889,41 @@ async def donor_carrier_add(request: Request, donor_id: int):
     except ValueError as exc:
         return _donor_page(request, user, donor, error=str(exc), status_code=400)
     _flash(request, "Carrier result saved.")
+    return _redirect(f"/bank/donors/{donor.id}")
+
+
+@router.post("/bank/donors/{donor_id}/motility")
+async def donor_motility_upload(request: Request, donor_id: int):
+    """Analyze an uploaded semen sample video and store the result."""
+    form = await _form(request)
+    try:
+        user = _require_consent(request, "bank")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    donor = _owned_donor(db, user.id, donor_id)
+    video = form.get("video")
+    if video is None or not getattr(video, "filename", ""):
+        return _donor_page(
+            request, user, donor, error="Choose a video file.", status_code=400
+        )
+    video_bytes = await video.read()
+    result = analyze_donor_video(
+        video_bytes, video.filename, request.app.state.settings
+    )
+    if result is None:
+        return _donor_page(
+            request,
+            user,
+            donor,
+            error="Motility analysis is unavailable right now.",
+            status_code=503,
+        )
+    donor.motility_total_pct = result["summary"]["total_motility_percent"]
+    donor.motility_progressive_pct = result["summary"]["percent_progressive"]
+    donor.motility_video_url = result["annotated_video_url"]
+    db.commit()
+    _flash(request, "Motility result saved.")
     return _redirect(f"/bank/donors/{donor.id}")
 
 
