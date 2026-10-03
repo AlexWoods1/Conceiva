@@ -1,3 +1,14 @@
+# Project data and model weights (hackathon rule: never commit these,
+# except the trained detector itself, needed by the other webapp this
+# project integrates into)
+data/*
+!data/.gitkeep
+weights/*
+!weights/.gitkeep
+!weights/sperm_detector.pt
+runs/
+out/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -219,7 +230,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Demo database and Vercel link
-data/
+# Demo database and Vercel link (data/ itself is handled above, with
+# exceptions for the ml pipeline's .gitkeep and the trained detector)
 .vercel/
 
