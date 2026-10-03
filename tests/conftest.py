@@ -239,6 +239,10 @@ def make_app(tmp_path):
             "llm_model": "test-model",
             "enable_face_compare": False,
             "seed_on_empty": False,
+            "stripe_secret_key": "",
+            "stripe_webhook_secret": "",
+            "stripe_price_id": "",
+            "app_base_url": "http://testserver",
         }
         values.update(overrides)
         return create_app(Settings(**values))

@@ -32,6 +32,12 @@ class User(Base):
     consent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
 
 
 class CounselorProfile(Base):
