@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Book a counselor{% endblock %}
 {% block body %}
-<h1>Book a counselor</h1>
+<p class="match-back"><a href="/couple/journey">My Journey</a></p>
+<h1>Counselor review</h1>
 <p>
-  Every genetic counselor with an open future slot is listed here.
-  Your shortlist has {{ shortlist_count }} candidate{{ "s" if shortlist_count != 1 else "" }}
-  (cap {{ max_shortlist }}).
+  Optional. A counselor with an open slot can see the donors on your shortlist.
+  Your shortlist has {{ shortlist_count }} donor{{ "s" if shortlist_count != 1 else "" }}
+  (cap {{ max_shortlist }}). This is not a clinic appointment.
 </p>
 {% if shortlist_count < 1 %}
 <p class="error">Add at least one candidate on <a href="/couple/shortlist">Shortlist</a> before booking.</p>

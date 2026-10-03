@@ -2,7 +2,7 @@
 {% block title %}Sign in{% endblock %}
 {% block body %}
 <h1>Sign in</h1>
-<p>One sign-in page. A couple, sperm bank, and genetic counselor use different account types.</p>
+<p>Intended parents and sperm banks share this sign-in. Genetic counselor access stays available for review visits.</p>
 <form method="post" action="/login" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <label>Email <input name="email" type="email" autocomplete="username" required /></label>
@@ -19,7 +19,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <fieldset>
     <legend>Account type</legend>
-    <label><input type="radio" name="role" value="couple" {% if role == "couple" %}checked{% endif %} /> Couple</label>
+    <label><input type="radio" name="role" value="couple" {% if role == "couple" %}checked{% endif %} /> Intended parent</label>
     <label><input type="radio" name="role" value="bank" {% if role == "bank" %}checked{% endif %} /> Sperm bank</label>
     <label><input type="radio" name="role" value="counselor" {% if role == "counselor" %}checked{% endif %} /> Genetic counselor</label>
   </fieldset>

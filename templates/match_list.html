@@ -1,67 +1,119 @@
 {% extends "base.html" %}
-{% block title %}Matches{% endblock %}
+{% block title %}Discover{% endblock %}
 {% block body %}
-<h1>Ranked donors</h1>
-<p>Clear medical matches come first. A carrier conflict stays on the row and is not hidden. Blood type on your history is the parent's type, shown here next to the donor's type.</p>
-<p>
-  Shortlist {{ shortlist_count }} of {{ max_shortlist }} ·
-  <a href="/couple/shortlist">Open shortlist</a> ·
-  <a href="/couple/book">Book a counselor</a>
-</p>
+<section class="page-intro">
+  <p class="eyebrow">Discover</p>
+  <h1>Approved donor records</h1>
+  <p>
+    Clear medical records come first. A carrier conflict stays on the row.
+    Blood type here is the parent's type, shown next to the donor's type.
+    Shortlist {{ shortlist_count }} of {{ max_shortlist }} ·
+    <a href="/couple/shortlist">Shortlist</a> ·
+    <a href="/couple/journey">My Journey</a>
+  </p>
+</section>
+
+<form method="get" action="/match" class="filters">
+  <label>Search
+    <input name="q" value="{{ filters.q }}" placeholder="Code or ancestry" />
+  </label>
+  <label>CMV
+    <select name="cmv">
+      <option value="">Any</option>
+      {% for item in cmv_status %}
+      <option value="{{ item }}" {% if filters.cmv == item %}selected{% endif %}>{{ cmv_status_labels[item] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Quarantine
+    <select name="quarantine">
+      <option value="">Any</option>
+      {% for item in quarantine %}
+      <option value="{{ item }}" {% if filters.quarantine == item %}selected{% endif %}>{{ quarantine_labels[item] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>ID release
+    <select name="id_release">
+      <option value="">Any</option>
+      {% for item in id_release %}
+      <option value="{{ item }}" {% if filters.id_release == item %}selected{% endif %}>{{ id_release_labels[item] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Carrier conflicts
+    <select name="conflicts">
+      <option value="show" {% if filters.conflicts != "hide" %}selected{% endif %}>Show</option>
+      <option value="hide" {% if filters.conflicts == "hide" %}selected{% endif %}>Hide</option>
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+</form>
+
 {% if not survey.preferences_done %}
-<p>Save both survey steps to see a ranked list.</p>
+<p class="empty-state">Save <a href="/couple/survey/preferences">preferences</a> to see donor records. History and carriers can come first from <a href="/couple/journey">My Journey</a>.</p>
 {% elif not rows %}
-<p>No confirmed donors are on file.</p>
+<p class="empty-state">No donor records match these filters.</p>
 {% else %}
 <div class="rows">
   {% for donor, result in rows %}
+  {% set stage = donor_stage(donor) %}
   <article class="donor-row">
     <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" width="128" height="128" />
     <div class="donor-copy">
-      {% if result.hard_stop %}
-      <p class="stop">Carrier conflict. Not a candidate.</p>
-      {% endif %}
-      <h2>{{ donor.code }}</h2>
-      {% if result.hard_stop %}
-      <p class="score">Blocked</p>
-      {% else %}
-      <p class="score">Medical rank {{ result.score }}</p>
-      {% endif %}
+      <div class="row-head">
+        <h2>{{ donor.code }}</h2>
+        {% if result.hard_stop %}
+        <span class="status-pill status-cancelled">Carrier conflict</span>
+        {% elif stage.available %}
+        <span class="status-pill status-booked">In discovery</span>
+        {% else %}
+        <span class="status-pill">{{ stage.current }}</span>
+        {% endif %}
+      </div>
       <p class="meta">
-        Donor blood {{ donor.blood_type or "not recorded" }}
+        Blood {{ donor.blood_type or "not recorded" }}
         {% if donor.rh %}{{ rh_labels[donor.rh] }}{% endif %}
         · {{ cmv_status_labels[donor.cmv] }}
         · {{ quarantine_labels[donor.quarantine] }}
         · family limit {{ donor.family_limit }}
         · {{ id_release_labels[donor.id_release_policy] }}
+        {% if donor.ancestry %}· {{ donor.ancestry }}{% endif %}
       </p>
+      {% if donor.motility_total_pct is not none %}
+      <p class="meta">Motility {{ "%.1f"|format(donor.motility_total_pct) }}% total · {{ stage.sample_review }}</p>
+      {% else %}
+      <p class="meta">No sample analysis on file.</p>
+      {% endif %}
       {% if demo_blurbs.get(donor.code) %}
-      <p class="help">{{ demo_blurbs[donor.code] }}</p>
+      <p class="caption">{{ demo_blurbs[donor.code] }}</p>
       {% endif %}
       <ul class="reasons">
         {% for reason in result.reasons if reason.kind == "hard_stop" %}
         <li>{{ reason.text }}</li>
         {% endfor %}
-        {% for reason in result.reasons if reason.kind != "hard_stop" %}
+        {% for reason in result.reasons if reason.kind != "hard_stop" and reason.kind != "blood" %}
         <li>{{ reason.text }}</li>
         {% endfor %}
       </ul>
       <p class="caption">Synthetic stand-in. Not a donor, not a child, and not a prediction.</p>
       {% if face_compare and result.face_score is not none %}
-      <p>Non-clinical resemblance stub: {{ result.face_score }}. Not part of the medical rank.</p>
+      <p class="caption">Non-clinical resemblance stub: {{ result.face_score }}. Not part of the medical record comparison.</p>
       {% endif %}
-      <a href="/match/{{ donor.id }}">Open explanation</a>
-      {% if donor.id in shortlisted_ids %}
-      <form method="post" action="/couple/shortlist/{{ donor.id }}/remove" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}" />
-        <button type="submit" class="linkish">Remove from shortlist</button>
-      </form>
-      {% else %}
-      <form method="post" action="/couple/shortlist/{{ donor.id }}/add" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}" />
-        <button type="submit" class="linkish">Add to shortlist</button>
-      </form>
-      {% endif %}
+      <p class="row-actions">
+        <a href="/match/{{ donor.id }}">View profile</a>
+        {% if donor.id in shortlisted_ids %}
+        <form method="post" action="/couple/shortlist/{{ donor.id }}/remove" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}" />
+          <button type="submit" class="linkish">Remove from shortlist</button>
+        </form>
+        {% else %}
+        <form method="post" action="/couple/shortlist/{{ donor.id }}/add" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}" />
+          <button type="submit" class="linkish">Add to shortlist</button>
+        </form>
+        {% endif %}
+      </p>
     </div>
   </article>
   {% endfor %}

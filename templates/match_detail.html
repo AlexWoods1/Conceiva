@@ -2,7 +2,8 @@
 {% block title %}{{ donor.code }}{% endblock %}
 {% block body %}
 <section class="match-page">
-  <p class="match-back"><a href="/match">← Matches</a></p>
+  <p class="match-back"><a href="/match">Discover</a></p>
+  {% set stage = donor_stage(donor) %}
 
   <header class="match-header">
     <img
@@ -13,47 +14,61 @@
       height="96"
     />
     <div class="match-header-copy">
-      <p class="match-kicker">Donor match</p>
+      <p class="match-kicker">Donor profile</p>
       <h1>{{ donor.code }}</h1>
       {% if result.hard_stop %}
-      <p class="match-status match-status-stop">Blocked · carrier conflict</p>
+      <p class="match-status match-status-stop">Carrier conflict. This record stays visible.</p>
       {% else %}
-      <p class="match-status">Medical rank {{ result.score }}</p>
+      <p class="match-status">{{ stage.current }}</p>
       {% endif %}
       <p class="caption">Synthetic stand-in. Not a donor, not a child, and not a prediction.</p>
     </div>
   </header>
 
-  {% if result.hard_stop %}
-  <p class="stop">Carrier conflict. Not a candidate.</p>
+  <dl class="fact-grid">
+    <div><dt>Blood type</dt><dd>{{ donor.blood_type or "Not recorded" }} {% if donor.rh %}{{ rh_labels[donor.rh] }}{% endif %}</dd></div>
+    <div><dt>Ancestry context</dt><dd>{{ donor.ancestry or "Not recorded" }}</dd></div>
+    <div><dt>CMV</dt><dd>{{ cmv_status_labels[donor.cmv] }}</dd></div>
+    <div><dt>Quarantine</dt><dd>{{ quarantine_labels[donor.quarantine] }}</dd></div>
+    <div><dt>Family limit</dt><dd>{{ donor.family_limit }}</dd></div>
+    <div><dt>ID release</dt><dd>{{ id_release_labels[donor.id_release_policy] }}</dd></div>
+    <div><dt>Panel</dt><dd>{{ donor.panel or "Not in the record" }}</dd></div>
+    <div><dt>Sample analysis</dt><dd>
+      {% if donor.motility_total_pct is not none %}
+      {{ "%.1f"|format(donor.motility_total_pct) }}% total
+      {% if donor.motility_progressive_pct is not none %}· {{ "%.1f"|format(donor.motility_progressive_pct) }}% progressive{% endif %}
+      · {{ stage.sample_review }}
+      {% else %}
+      No sample analysis on file
+      {% endif %}
+    </dd></div>
+  </dl>
+
+  {% if result.reasons %}
+  <section>
+    <h2>What differs on the two records</h2>
+    <ul class="reasons">
+      {% for reason in result.reasons %}
+      <li>{{ reason.text }}</li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endif %}
-  <ul class="reasons">
-    {% for reason in result.reasons if reason.kind == "hard_stop" %}
-    <li>{{ reason.text }}</li>
-    {% endfor %}
-    {% for reason in result.reasons if reason.kind != "hard_stop" %}
-    <li>{{ reason.text }}</li>
-    {% endfor %}
-  </ul>
 
   <section class="explain-block">
     <div class="explain-head">
       <div>
-        <h2>Explanation</h2>
-        <p class="help">Built only from stored match fields. Missing facts stay missing.</p>
+        <h2>Cited summary</h2>
+        <p class="help">Optional. Built only from stored fields. Missing facts stay missing.</p>
       </div>
       <form method="post" action="/match/{{ donor.id }}/explain">
         <input type="hidden" name="csrf" value="{{ csrf }}" />
-        <button type="submit">{% if sentences %}Regenerate{% else %}Explain from the record{% endif %}</button>
+        <button type="submit" class="button-ghost-form">{% if sentences %}Update summary{% else %}Write summary from the record{% endif %}</button>
       </form>
     </div>
 
-    <section class="ai-output" aria-label="AI explanation">
-      <div class="ai-output-label">
-        <span class="ai-output-badge">AI output</span>
-        <span class="ai-output-meta">Field-cited · decision support only</span>
-      </div>
-      {% if sentences %}
+    {% if sentences %}
+    <section class="ai-output" aria-label="Cited summary">
       <div class="ai-output-body">
         {% for sentence in sentences %}
         <p>{{ sentence.text }}</p>
@@ -74,12 +89,12 @@
           {% endfor %}
         </ul>
       </div>
-      {% else %}
-      <div class="ai-output-body ai-output-empty">
-        <p>No AI output yet. Use the button above to generate an explanation from this match record.</p>
-      </div>
-      {% endif %}
     </section>
+    {% endif %}
   </section>
+
+  {% if face_compare and result.face_score is not none %}
+  <p class="caption">Non-clinical resemblance stub: {{ result.face_score }}. Not part of the medical comparison.</p>
+  {% endif %}
 </section>
 {% endblock %}

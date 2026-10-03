@@ -1,100 +1,161 @@
 {% extends "base.html" %}
 {% block title %}{% if donor.id %}{{ donor.code }}{% else %}New donor{% endif %}{% endblock %}
 {% block body %}
-<h1>{% if donor.id %}{{ donor.code }}{% else %}New donor{% endif %}</h1>
-<p>Per-donor bank survey. The portrait is a synthetic placeholder.</p>
-<form method="post" action="{% if donor.id %}/bank/donors/{{ donor.id }}{% else %}/bank/donors/new{% endif %}" class="stack">
+{% set stage = donor_stage(donor) %}
+<section class="page-intro">
+  <p class="match-back"><a href="/bank">Donors</a></p>
+  <h1>{% if donor.id %}{{ donor.code }}{% else %}New donor{% endif %}</h1>
+  <p class="lede">One donor record. Portraits stay synthetic. Sample analysis is a lab-reviewed measurement, not a diagnosis.</p>
+</section>
+
+<ol class="lifecycle" aria-label="Donor lifecycle">
+  {% for step in stage.steps %}
+  <li class="{% if step.done %}is-done{% elif step.current %}is-current{% endif %}">
+    <span class="lifecycle-mark"></span>
+    <span>{{ step.label }}</span>
+  </li>
+  {% endfor %}
+</ol>
+
+<nav class="subnav" aria-label="Donor record">
+  <a href="#overview">Overview</a>
+  <a href="#screening">Screening</a>
+  <a href="#samples">Samples</a>
+  <a href="#collections">Collections</a>
+  <a href="#documents">Documents</a>
+</nav>
+
+<form method="post" action="{% if donor.id %}/bank/donors/{{ donor.id }}{% else %}/bank/donors/new{% endif %}" class="stack stack-wide">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
-  <label>Code <input name="code" value="{{ donor.code }}" required maxlength="64" /></label>
-  <label>Blood type
-    <select name="blood_type">
-      {% for item in blood_types %}
-      <option value="{{ item }}" {% if donor.blood_type == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Rh
-    <select name="rh">
-      {% for item in rh_values %}
-      <option value="{{ item }}" {% if donor.rh == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Ancestry context
-    <input name="ancestry" value="{{ donor.ancestry }}" maxlength="255" />
-  </label>
-  <label>Panel <input name="panel" value="{{ donor.panel }}" maxlength="128" /></label>
-  <label>CMV
-    <select name="cmv">
-      {% for item in cmv_status %}
-      <option value="{{ item }}" {% if donor.cmv == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Quarantine
-    <select name="quarantine">
-      {% for item in quarantine %}
-      <option value="{{ item }}" {% if donor.quarantine == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Family limit
-    <input name="family_limit" type="number" min="1" max="25" value="{{ donor.family_limit or 10 }}" required />
-  </label>
-  <label>ID-release policy
-    <select name="id_release_policy">
-      {% for item in id_release %}
-      <option value="{{ item }}" {% if donor.id_release_policy == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Synthetic portrait
-    <select name="photo_key">
-      {% for item in photo_keys %}
-      <option value="{{ item }}" {% if donor.photo_key == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
+
+  <section class="panel" id="overview">
+    <h2>Overview</h2>
+    <div class="form-grid">
+      <label>Code <input name="code" value="{{ donor.code }}" required maxlength="64" /></label>
+      <label>Blood type
+        <select name="blood_type">
+          {% for item in blood_types %}
+          <option value="{{ item }}" {% if donor.blood_type == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Rh
+        <select name="rh">
+          {% for item in rh_values %}
+          <option value="{{ item }}" {% if donor.rh == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Ancestry context
+        <input name="ancestry" value="{{ donor.ancestry }}" maxlength="255" />
+      </label>
+      <label>Family limit
+        <input name="family_limit" type="number" min="1" max="25" value="{{ donor.family_limit or 10 }}" required />
+      </label>
+      <label>ID-release policy
+        <select name="id_release_policy">
+          {% for item in id_release %}
+          <option value="{{ item }}" {% if donor.id_release_policy == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Synthetic portrait
+        <select name="photo_key">
+          {% for item in photo_keys %}
+          <option value="{{ item }}" {% if donor.photo_key == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel" id="screening">
+    <h2>Screening</h2>
+    <div class="form-grid">
+      <label>Panel <input name="panel" value="{{ donor.panel }}" maxlength="128" /></label>
+      <label>CMV
+        <select name="cmv">
+          {% for item in cmv_status %}
+          <option value="{{ item }}" {% if donor.cmv == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Quarantine
+        <select name="quarantine">
+          {% for item in quarantine %}
+          <option value="{{ item }}" {% if donor.quarantine == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="help">Carrier results are saved with the separate form below. Clearing quarantine is what makes a confirmed record available in discovery.</p>
+  </section>
+
+  <section class="panel" id="collections">
+    <h2>Collections</h2>
+    <p class="help">There is no vial or collection table. Family limit above is the cap on this donor. Inventory lists the donor once the record is cleared.</p>
+  </section>
+
+  <section class="panel" id="documents">
+    <h2>Documents</h2>
+    <p class="help">
+      {% if donor.catalog_source_url %}
+      Catalog source: {{ donor.catalog_source_url }}
+      {% else %}
+      No catalog URL on this record. File uploads for consent forms are not stored.
+      {% endif %}
+    </p>
+  </section>
+
   <button type="submit">Save donor</button>
 </form>
+
 {% if donor.id %}
-<h2>Carrier results</h2>
-{% with post_url="/bank/donors/" ~ donor.id ~ "/carriers", delete_url="", form_id="donor" %}
-{% include "carrier_form.html" %}
-{% endwith %}
-<h2>Motility test</h2>
-<p class="hint">{{ motility_disclaimer }}</p>
-{% if donor.motility_total_pct is not none %}
-{% if donor.motility_below_reference %}
-<p class="motility-flag">
-  Below WHO lower reference limits. This donor carries a ranking penalty and
-  the reason is shown to couples on the match page.
-</p>
-{% endif %}
-<ul class="motility-readout">
-  <li{% if donor.motility_total_pct < who_total_min %} class="below"{% endif %}>
-    Total motility <strong>{{ "%.1f"|format(donor.motility_total_pct) }}%</strong>
-    <span class="hint">WHO lower reference {{ who_total_min }}%</span>
-  </li>
-  <li{% if donor.motility_progressive_pct < who_progressive_min %} class="below"{% endif %}>
-    Progressive <strong>{{ "%.1f"|format(donor.motility_progressive_pct) }}%</strong>
-    <span class="hint">WHO lower reference {{ who_progressive_min }}%</span>
-  </li>
-</ul>
-{% if donor.motility_video_url %}
-<video src="{{ donor.motility_video_url }}" controls width="480"></video>
-<p class="hint">
-  Each tracked sperm is drawn in its motility category: green progressive,
-  yellow non-progressive, red immotile. Colors update as a track accumulates,
-  so they settle a moment after a sperm first appears.
-</p>
-{% endif %}
-{% endif %}
-<form method="post" action="/bank/donors/{{ donor.id }}/motility" enctype="multipart/form-data" class="stack">
-  <input type="hidden" name="csrf" value="{{ csrf }}" />
-  <label>Upload sample video <input type="file" name="video" accept="video/*" required /></label>
-  <button type="submit">Analyze motility</button>
-</form>
+<section class="panel" id="screening-results">
+  <h2>Carrier results</h2>
+  {% with post_url="/bank/donors/" ~ donor.id ~ "/carriers", delete_url="", form_id="donor" %}
+  {% include "carrier_form.html" %}
+  {% endwith %}
+</section>
+
+<section class="panel" id="samples">
+  <h2>Samples</h2>
+  <p class="hint">{{ motility_disclaimer }}</p>
+  <p class="help">Upload a clip, run the existing analysis, then review the flag. The model does not approve the donor.</p>
+  {% if donor.motility_total_pct is not none %}
+  {% if donor.motility_below_reference %}
+  <p class="motility-flag">
+    Below WHO lower reference limits. This stays a ranking note for intended parents.
+    Lab review is still required.
+  </p>
+  {% endif %}
+  <ul class="motility-readout">
+    <li{% if donor.motility_total_pct < who_total_min %} class="below"{% endif %}>
+      Total motility <strong>{{ "%.1f"|format(donor.motility_total_pct) }}%</strong>
+      <span class="hint">WHO lower reference {{ who_total_min }}%</span>
+    </li>
+    <li{% if donor.motility_progressive_pct < who_progressive_min %} class="below"{% endif %}>
+      Progressive <strong>{{ "%.1f"|format(donor.motility_progressive_pct) }}%</strong>
+      <span class="hint">WHO lower reference {{ who_progressive_min }}%</span>
+    </li>
+  </ul>
+  {% if donor.motility_video_url %}
+  <video src="{{ donor.motility_video_url }}" controls width="480"></video>
+  <p class="hint">
+    Each tracked sperm is drawn in its motility category: green progressive,
+    yellow non-progressive, red immotile.
+  </p>
+  {% endif %}
+  {% else %}
+  <p class="empty-state">No analysis yet.</p>
+  {% endif %}
+  <form method="post" action="/bank/donors/{{ donor.id }}/motility" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}" />
+    <label>Sample video <input type="file" name="video" accept="video/*" required /></label>
+    <button type="submit">Run analysis</button>
+  </form>
+</section>
+
 <form method="post" action="/bank/donors/{{ donor.id }}/delete">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <button type="submit" class="danger">Delete donor</button>

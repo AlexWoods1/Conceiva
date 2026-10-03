@@ -18,8 +18,8 @@
       {% endif %}
       {% if appointment.status == "booked" %}
       <p class="help">
-        Candidates are the set the couple booked. Profiles are live from the database.
-        Run the AI tool for a cited report per candidate during the meeting.
+        Candidates are the set the intended parent booked. Profiles are live from the database.
+        Write a cited report from those fields during the meeting.
       </p>
       {% else %}
       <p class="help">This visit is cancelled. The slot is open for booking again. Existing reports stay below.</p>
@@ -51,7 +51,7 @@
           {% if item.result.hard_stop %}
           <p class="match-status match-status-stop">Blocked · carrier conflict</p>
           {% else %}
-          <p class="match-status">Medical rank {{ item.result.score }}</p>
+          <p class="match-status">No shared carrier conflict</p>
           {% endif %}
         </div>
         <p class="meta">

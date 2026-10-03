@@ -1,32 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Shortlist{% endblock %}
 {% block body %}
-<h1>Counseling shortlist</h1>
-<p>
-  Candidates you chose for a genetic counselor visit ({{ shortlist_count }} of {{ max_shortlist }}).
-  Hard stops stay visible so the counselor can discuss them.
-</p>
+<section class="page-intro">
+  <p class="eyebrow">Shortlist</p>
+  <h1>Donors you are comparing</h1>
+  <p>
+    {{ shortlist_count }} of {{ max_shortlist }}.
+    A carrier conflict stays on the card so you can still discuss it.
+    <a href="/match">Discover</a> ·
+    <a href="/couple/book">Counselor review</a>
+  </p>
+</section>
 {% if not rows %}
-<p>No candidates yet. Add donors from <a href="/match">Matches</a>.</p>
+<p class="empty-state">No donors yet. Add records from <a href="/match">Discover</a>.</p>
 {% else %}
 <div class="rows">
   {% for donor, result, carriers in rows %}
   <article class="donor-row">
     <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" width="128" height="128" />
     <div class="donor-copy">
-      {% if result.hard_stop %}
-      <p class="stop">Carrier conflict. Not a medical candidate.</p>
-      {% endif %}
-      <h2>{{ donor.code }}</h2>
-      {% if result.hard_stop %}
-      <p class="score">Blocked</p>
-      {% else %}
-      <p class="score">Medical rank {{ result.score }}</p>
-      {% endif %}
+      <div class="row-head">
+        <h2>{{ donor.code }}</h2>
+        {% if result.hard_stop %}
+        <span class="status-pill status-cancelled">Carrier conflict</span>
+        {% endif %}
+      </div>
       <p class="meta">
-        Donor blood {{ donor.blood_type or "not recorded" }}
+        Blood {{ donor.blood_type or "not recorded" }}
         {% if donor.rh %}{{ rh_labels[donor.rh] }}{% endif %}
         · {{ cmv_status_labels[donor.cmv] }}
+        · {{ quarantine_labels[donor.quarantine] }}
+        · family limit {{ donor.family_limit }}
         {% if donor.motility_total_pct is not none %}
         · motility {{ "%.1f"|format(donor.motility_total_pct) }}%
         {% endif %}
@@ -37,15 +41,19 @@
         <li>{{ row.gene }} · {{ zygosity_labels[row.zygosity] }}{% if row.condition %} · {{ row.condition }}{% endif %}</li>
         {% endfor %}
       </ul>
+      {% else %}
+      <p class="meta">No carrier results on this donor record.</p>
       {% endif %}
-      <form method="post" action="/couple/shortlist/{{ donor.id }}/remove" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}" />
-        <button type="submit" class="linkish">Remove</button>
-      </form>
+      <p class="row-actions">
+        <a href="/match/{{ donor.id }}">View profile</a>
+        <form method="post" action="/couple/shortlist/{{ donor.id }}/remove" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}" />
+          <button type="submit" class="linkish">Remove</button>
+        </form>
+      </p>
     </div>
   </article>
   {% endfor %}
 </div>
-<p><a class="button" href="/couple/book">Book a counselor</a></p>
 {% endif %}
 {% endblock %}

@@ -7,4 +7,5 @@ matplotlib
 fastapi
 uvicorn[standard]
 python-multipart
+imageio-ffmpeg
 pytest

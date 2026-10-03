@@ -48,11 +48,16 @@ from app.billing import (
 from app.llm import explain
 from app.models import (
     Appointment,
+    AppointmentDonor,
     AvailabilitySlot,
     Carrier,
     ContactMessage,
     CounselorProfile,
+    CoupleProfile,
+    CoupleSurvey,
     Donor,
+    PriorHistory,
+    ShortlistItem,
     User,
 )
 from app.motility_client import analyze_donor_video
@@ -110,6 +115,75 @@ TEMPLATES.env.globals.update(
     common_carriers=COMMON_CARRIERS,
 )
 FIXTURE_CATALOG = Path(__file__).resolve().parent / "fixtures" / "sample_catalog.html"
+
+
+def donor_stage(donor) -> dict:
+    """Read a donor's place in the lifecycle from fields the record already stores.
+
+    Args:
+        donor: Donor row, or any object with the same attributes.
+
+    Returns:
+        Step list, the earliest incomplete step, and the sample-review line.
+        Later steps can be done while an earlier one is still open.
+    """
+    panel = (getattr(donor, "panel", "") or "").strip()
+    cmv = getattr(donor, "cmv", "") or ""
+    screening = bool(panel) or cmv not in {"", "unknown"}
+    sample = getattr(donor, "motility_total_pct", None) is not None
+    cleared = getattr(donor, "quarantine", "") == "cleared"
+    available = bool(getattr(donor, "catalog_confirmed", False)) and cleared
+    steps = [
+        {"id": "record", "label": "Record", "done": True, "current": False},
+        {"id": "screening", "label": "Screening", "done": screening, "current": False},
+        {"id": "sample", "label": "Sample analysis", "done": sample, "current": False},
+        {"id": "cleared", "label": "Cleared", "done": cleared, "current": False},
+        {"id": "available", "label": "In discovery", "done": available, "current": False},
+    ]
+    for step in steps:
+        if not step["done"]:
+            step["current"] = True
+            break
+    current = next((step["label"] for step in steps if step["current"]), "Active")
+    if sample and getattr(donor, "motility_below_reference", False):
+        review = "Below WHO reference — needs lab review"
+    elif sample:
+        review = "Analysis on file"
+    else:
+        review = "No sample analysis yet"
+    return {
+        "steps": steps,
+        "current": current,
+        "available": available,
+        "sample_review": review,
+    }
+
+
+TEMPLATES.env.globals["donor_stage"] = donor_stage
+
+
+def _filter_matches(rows, params):
+    """Narrow an already ranked list. Empty filters leave the list unchanged."""
+    query = str(params.get("q", "")).strip().lower()
+    cmv = str(params.get("cmv", ""))
+    quarantine = str(params.get("quarantine", ""))
+    id_release = str(params.get("id_release", ""))
+    conflicts = str(params.get("conflicts", "show"))
+    kept = []
+    for donor, result in rows:
+        haystack = f"{donor.code} {donor.ancestry or ''}".lower()
+        if query and query not in haystack:
+            continue
+        if cmv and donor.cmv != cmv:
+            continue
+        if quarantine and donor.quarantine != quarantine:
+            continue
+        if id_release and donor.id_release_policy != id_release:
+            continue
+        if conflicts == "hide" and result.hard_stop:
+            continue
+        kept.append((donor, result))
+    return kept
 
 
 def _csrf(request: Request) -> str:
@@ -288,6 +362,12 @@ def home(request: Request):
 def sample_start(request: Request):
     """Walk through the seeded couple and bank demos."""
     return _render(request, "start.html", _user(request))
+
+
+@router.get("/donors")
+def donor_journey_public(request: Request):
+    """Explain the donor lifecycle. Donor accounts are not a separate login."""
+    return _render(request, "donors.html", _user(request))
 
 
 @router.get("/privacy")
@@ -729,7 +809,9 @@ def match_list(request: Request):
         return _redirect(needed.path)
     db = _db(request)
     survey = get_or_create_survey(db, user.id)
-    rows = ranked_matches(db, user, request.app.state.settings)
+    rows = _filter_matches(
+        ranked_matches(db, user, request.app.state.settings), request.query_params
+    )
     return _render(
         request,
         "match_list.html",
@@ -738,6 +820,16 @@ def match_list(request: Request):
         survey=survey,
         shortlisted_ids=shortlist_donor_ids(db, user.id),
         shortlist_count=len(list_shortlist(db, user.id)),
+        filters={
+            "q": str(request.query_params.get("q", "")),
+            "cmv": str(request.query_params.get("cmv", "")),
+            "quarantine": str(request.query_params.get("quarantine", "")),
+            "id_release": str(request.query_params.get("id_release", "")),
+            "conflicts": str(request.query_params.get("conflicts", "show")),
+        },
+        cmv_status=CMV_STATUS,
+        quarantine=QUARANTINE,
+        id_release=ID_RELEASE,
     )
 
 
@@ -787,6 +879,14 @@ async def match_explain(request: Request, donor_id: int):
     return _redirect(f"/match/{donor.id}")
 
 
+def _bank_donors(db: Session, bank_user_id: int) -> list[Donor]:
+    return list(
+        db.scalars(
+            select(Donor).where(Donor.bank_user_id == bank_user_id).order_by(Donor.code)
+        )
+    )
+
+
 @router.get("/bank")
 def bank_home(request: Request):
     """Donor inventory for the signed-in bank."""
@@ -794,12 +894,134 @@ def bank_home(request: Request):
         user = _require_consent(request, "bank")
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
-    donors = list(
-        _db(request).scalars(
-            select(Donor).where(Donor.bank_user_id == user.id).order_by(Donor.code)
+    donors = _bank_donors(_db(request), user.id)
+    return _render(request, "bank.html", user, donors=donors)
+
+
+@router.get("/bank/overview")
+def bank_overview(request: Request):
+    """Operational snapshot built from this bank's donor records and selections."""
+    try:
+        user = _require_consent(request, "bank")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    donors = _bank_donors(db, user.id)
+    stages = [(donor, donor_stage(donor)) for donor in donors]
+    counts: dict[str, int] = {}
+    for _donor, stage in stages:
+        counts[stage["current"]] = counts.get(stage["current"], 0) + 1
+    attention = [
+        donor
+        for donor, _stage in stages
+        if donor.motility_below_reference or donor.quarantine == "in_quarantine"
+    ]
+    no_sample = [donor for donor, stage in stages if not stage["steps"][2]["done"]]
+    available = [donor for donor, stage in stages if stage["available"]]
+    return _render(
+        request,
+        "bank_overview.html",
+        user,
+        donors=donors,
+        stage_counts=counts,
+        attention=attention,
+        no_sample=no_sample,
+        available_count=len(available),
+        selection_count=_bank_selection_count(db, [donor.id for donor in donors]),
+    )
+
+
+@router.get("/bank/collections")
+def bank_collections(request: Request):
+    """Sample analyses on file. Vials are not a separate table."""
+    try:
+        user = _require_consent(request, "bank")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    donors = _bank_donors(_db(request), user.id)
+    return _render(request, "bank_collections.html", user, donors=donors)
+
+
+@router.get("/bank/inventory")
+def bank_inventory(request: Request):
+    """Donors a recipient can discover: confirmed and cleared."""
+    try:
+        user = _require_consent(request, "bank")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    donors = [
+        donor
+        for donor in _bank_donors(_db(request), user.id)
+        if donor.catalog_confirmed and donor.quarantine == "cleared"
+    ]
+    return _render(request, "bank_inventory.html", user, donors=donors)
+
+
+@router.get("/bank/orders")
+def bank_orders(request: Request):
+    """Recipient shortlists and counselor visits that name this bank's donors."""
+    try:
+        user = _require_consent(request, "bank")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    donors = {donor.id: donor for donor in _bank_donors(db, user.id)}
+    return _render(
+        request,
+        "bank_orders.html",
+        user,
+        selections=_bank_selections(db, donors),
+    )
+
+
+def _bank_selection_count(db: Session, donor_ids: list[int]) -> int:
+    return len(_bank_selections(db, {donor_id: None for donor_id in donor_ids}))
+
+
+def _bank_selections(db: Session, donors: dict[int, Donor | None]) -> list[dict]:
+    """Shortlist rows and booked-visit links for one bank's donor ids."""
+    donor_ids = list(donors)
+    if not donor_ids:
+        return []
+    rows: list[dict] = []
+    shortlist = list(
+        db.scalars(
+            select(ShortlistItem).where(ShortlistItem.donor_id.in_(donor_ids))
         )
     )
-    return _render(request, "bank.html", user, donors=donors)
+    for item in shortlist:
+        couple = db.get(User, item.couple_user_id)
+        donor = donors.get(item.donor_id) or db.get(Donor, item.donor_id)
+        rows.append(
+            {
+                "kind": "Shortlist",
+                "status": "Considering",
+                "donor_code": donor.code if donor else "",
+                "donor_id": item.donor_id,
+                "who": couple.email if couple else "",
+            }
+        )
+    links = list(
+        db.scalars(
+            select(AppointmentDonor).where(AppointmentDonor.donor_id.in_(donor_ids))
+        )
+    )
+    for link in links:
+        appointment = db.get(Appointment, link.appointment_id)
+        if appointment is None:
+            continue
+        couple = db.get(User, appointment.couple_user_id)
+        donor = donors.get(link.donor_id) or db.get(Donor, link.donor_id)
+        rows.append(
+            {
+                "kind": "Counselor visit",
+                "status": appointment.status,
+                "donor_code": donor.code if donor else "",
+                "donor_id": link.donor_id,
+                "who": couple.email if couple else "",
+            }
+        )
+    return rows
 
 
 def _donor_page(
@@ -993,7 +1215,10 @@ async def donor_motility_upload(request: Request, donor_id: int):
         )
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
-    donor.motility_video_url = result["annotated_video_url"]
+    video_url = str(result["annotated_video_url"])
+    if video_url.startswith("/"):
+        video_url = request.app.state.settings.motility_service_url + video_url
+    donor.motility_video_url = video_url
     donor.motility_below_reference = (
         donor.motility_total_pct < WHO_TOTAL_MOTILITY_MIN_PCT
         or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
@@ -1254,6 +1479,93 @@ async def shortlist_remove(request: Request, donor_id: int):
     if "/couple/shortlist" in referer:
         return _redirect("/couple/shortlist")
     return _redirect("/match")
+
+
+@router.get("/couple/journey")
+def couple_journey(request: Request):
+    """Where this intended parent is, using records the app already stores."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    survey = db.get(CoupleSurvey, user.id)
+    profile = db.get(CoupleProfile, user.id)
+    history = db.get(PriorHistory, user.id)
+    carriers = list_carriers(db, "couple", user.id)
+    shortlist = list_shortlist(db, user.id)
+    appointments = list(
+        db.scalars(
+            select(Appointment)
+            .where(Appointment.couple_user_id == user.id)
+            .order_by(Appointment.id.desc())
+        )
+    )
+    booked = [row for row in appointments if row.status == APPOINTMENT_BOOKED]
+    reviews_done = bool(
+        profile
+        and profile.blood_type
+        and history is not None
+        and survey
+        and survey.clinical_done
+        and carriers
+    )
+    steps = [
+        {
+            "label": "Find a donor",
+            "done": bool(survey and survey.preferences_done),
+            "href": "/match",
+            "detail": "Preferences open Discover. Until then the list stays empty.",
+        },
+        {
+            "label": "Select donors",
+            "done": bool(shortlist),
+            "href": "/couple/shortlist",
+            "detail": f"{len(shortlist)} of {MAX_SHORTLIST} on the shortlist.",
+        },
+        {
+            "label": "Required reviews",
+            "done": reviews_done,
+            "href": "/couple/history",
+            "detail": "History, carrier results, and the clinical survey.",
+        },
+        {
+            "label": "Counselor review",
+            "done": bool(booked),
+            "href": "/couple/book",
+            "detail": "Optional visit. The counselor sees the shortlist you booked.",
+        },
+        {
+            "label": "Reserve or order",
+            "done": False,
+            "href": "",
+            "detail": "Vial reservation is not stored. A shortlist is not an order.",
+        },
+        {
+            "label": "Fulfillment",
+            "done": False,
+            "href": "",
+            "detail": "Shipment and release are not tracked yet.",
+        },
+        {
+            "label": "Clinic",
+            "done": False,
+            "href": "",
+            "detail": "No clinic handoff is recorded in this version.",
+        },
+    ]
+    current = next((step["label"] for step in steps if not step["done"]), "In progress")
+    return _render(
+        request,
+        "journey.html",
+        user,
+        steps=steps,
+        current=current,
+        survey=survey,
+        carrier_count=len(carriers),
+        shortlist_count=len(shortlist),
+        appointments=appointments,
+    )
 
 
 @router.get("/couple/shortlist")

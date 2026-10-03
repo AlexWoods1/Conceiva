@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block body %}
+<section class="page-intro">
+  <p class="eyebrow">Inventory</p>
+  <h1>Available to intended parents</h1>
+  <p class="lede">
+    Confirmed records that are out of quarantine. These are the donors Discover can rank.
+    Vial counts are not stored. Family limit is the cap on the donor record.
+  </p>
+</section>
+{% if donors %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Donor</th>
+      <th>CMV</th>
+      <th>Family limit</th>
+      <th>ID release</th>
+      <th>Sample</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for donor in donors %}
+    <tr>
+      <td><a href="/bank/donors/{{ donor.id }}">{{ donor.code }}</a></td>
+      <td>{{ cmv_status_labels[donor.cmv] }}</td>
+      <td>{{ donor.family_limit }}</td>
+      <td>{{ id_release_labels[donor.id_release_policy] }}</td>
+      <td>{{ donor_stage(donor).sample_review }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="empty-state">No cleared donor records.</p>
+{% endif %}
+{% endblock %}

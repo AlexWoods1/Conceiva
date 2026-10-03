@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+{% block body %}
+<section class="page-intro">
+  <p class="eyebrow">Orders</p>
+  <h1>Recipient selections</h1>
+  <p class="lede">
+    These are shortlist saves and counselor visits that name your donors.
+    They are not vial orders, shipments, or clinic bookings.
+  </p>
+</section>
+{% if selections %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Status</th>
+      <th>Donor</th>
+      <th>Intended parent</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in selections %}
+    <tr>
+      <td>{{ row.kind }}</td>
+      <td><span class="status-pill {% if row.status == 'booked' or row.status == 'Considering' %}status-booked{% elif row.status == 'cancelled' %}status-cancelled{% endif %}">{{ row.status }}</span></td>
+      <td><a href="/bank/donors/{{ row.donor_id }}">{{ row.donor_code }}</a></td>
+      <td>{{ row.who }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="empty-state">No recipient has shortlisted or booked a visit with these donors.</p>
+{% endif %}
+{% endblock %}

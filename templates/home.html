@@ -1,101 +1,65 @@
 {% extends "base.html" %}
-{% block title %}Donor Match{% endblock %}
+{% block title %}Conceiva{% endblock %}
 {% block body %}
 <div class="landing">
-  <section class="hero landing-hero">
-    <p class="hero-brand">Donor Match</p>
-    <h1>See carrier conflicts before you choose a donor.</h1>
+  <section class="hero-quiet">
+    <p class="eyebrow">Donor conception, in one place</p>
+    <h1>One connected journey from donor to intended parent to clinic.</h1>
     <p class="lede">
-      Rank donors from carrier status, blood-type flags, and survey fit.
-      Ancestry is allele-frequency context only. It does not change the rank.
+      Conceiva is the shared record for donor screening, sample analysis,
+      intended-parent discovery, and the steps that follow a selection.
     </p>
-    <div class="hero-cta">
-      <a class="button" href="/start">Sample start</a>
-      {% if user and user.consent_at and user.role == "couple" %}
-      <a class="button button-ghost" href="/match">View matches</a>
-      {% elif user and user.consent_at and user.role == "bank" %}
-      <a class="button button-ghost" href="/bank">Your donors</a>
-      {% elif user and user.consent_at and user.role == "counselor" %}
-      <a class="button button-ghost" href="/counselor">Your visits</a>
-      {% elif user %}
-      <a class="button button-ghost" href="/account">Account</a>
-      {% else %}
-      <a class="button button-ghost" href="/login">Sign in</a>
-      {% endif %}
-    </div>
-  </section>
-
-  <section class="landing-section">
-    <h2>What it is</h2>
-    <p class="section-lede">
-      Decision support for couples and sperm banks comparing a couple’s carrier
-      report with donor records you supply. One place to surface hard medical
-      conflicts first, then preference fit — not a diagnosis and not a prediction
-      of a child.
-    </p>
-  </section>
-
-  <section class="landing-section">
-    <h2>How a rank is built</h2>
-    <div class="facts">
-      <article>
-        <h3>Hard stop</h3>
-        <p>A gene both profiles list as a confirmed recessive carrier blocks that donor. The conflict stays on the row.</p>
-      </article>
-      <article>
-        <h3>Soft weights</h3>
-        <p>ID release, family limit, CMV, and quarantine change the score. Rh is a flag, not a block.</p>
-      </article>
-      <article>
-        <h3>Context only</h3>
-        <p>Ancestry overlap is allele-frequency context. It does not change the rank. There is no race filter.</p>
-      </article>
-    </div>
-  </section>
-
-  <section class="landing-section llm-section">
-    <h2>Explain from the record</h2>
-    <p class="section-lede">
-      Each match can open an explanation that cites stored database fields.
-      Missing facts are stated as not in the record. Clinical free text stays out
-      of model context.
-    </p>
-    <ul class="plain llm-points">
-      <li>With <code>LLM_API_KEY</code> set, only those retrieved fields go to the model endpoint.</li>
-      <li>Without a key, the same fields drive a deterministic explanation from the stored record.</li>
-      <li>The model does not diagnose, predict appearance, or rank by race or attractiveness.</li>
-    </ul>
-  </section>
-
-  {% if not user %}
-  <section class="landing-section">
-    <h2>Choose a door</h2>
-    <p class="section-lede">Sign in as the role that matches how you will use the demo.</p>
-    <div class="doors">
+    <div class="entry-grid">
       <a class="door" href="/login?role=couple">
-        <h2>Couple</h2>
-        <p>Enter history, a carrier form, and a two-step survey. Review a ranked list.</p>
+        <p class="eyebrow">Intended parent</p>
+        <h2>I'm looking for a donor</h2>
+        <p>Browse cleared donor records, compare a shortlist, and see what comes next.</p>
+      </a>
+      <a class="door" href="/donors">
+        <p class="eyebrow">Donor</p>
+        <h2>I'm a donor</h2>
+        <p>See the path from application through screening, sample review, and approval.</p>
       </a>
       <a class="door" href="/login?role=bank">
-        <h2>Sperm bank</h2>
-        <p>Keep a per-donor survey, or confirm fields parsed from a public catalog page.</p>
-      </a>
-      <a class="door" href="/login?role=counselor">
-        <h2>Genetic counselor</h2>
-        <p>Post open slots, open a couple’s shortlist, and run a cited AI report per candidate.</p>
+        <p class="eyebrow">Sperm bank</p>
+        <h2>I'm a sperm bank</h2>
+        <p>Move donors through screening, analysis, inventory, and recipient selections.</p>
       </a>
     </div>
+    {% if user and user.consent_at %}
+    <p class="hero-continue">
+      {% if user.role == "couple" %}
+      <a class="button" href="/couple/journey">Continue to My Journey</a>
+      {% elif user.role == "bank" %}
+      <a class="button" href="/bank/overview">Continue to Overview</a>
+      {% elif user.role == "counselor" %}
+      <a class="button" href="/counselor">Continue to visits</a>
+      {% endif %}
+    </p>
+    {% elif user %}
+    <p class="hero-continue"><a class="button" href="/consent">Continue</a></p>
+    {% endif %}
   </section>
-  {% endif %}
 
-  <section class="landing-section limits">
-    <h2>What we do not do</h2>
-    <ul class="plain">
-      <li>Predict or generate a future child’s face or appearance</li>
-      <li>Rank donors by IQ, personality, attractiveness, or other polygenic traits</li>
-      <li>Claim to diagnose disease or replace clinical genetic counseling</li>
-      <li>Use ancestry or race as a match-quality score</li>
-    </ul>
+  <section class="landing-section">
+    <h2>The same lifecycle, three views</h2>
+    <ol class="lifecycle lifecycle-legend">
+      <li><span>Application</span></li>
+      <li><span>Screening</span></li>
+      <li><span>Sample analysis</span></li>
+      <li><span>Approval</span></li>
+      <li><span>Inventory</span></li>
+      <li><span>Discovery</span></li>
+      <li><span>Selection</span></li>
+      <li><span>Clinic</span></li>
+    </ol>
+    <h2>How a record is compared</h2>
+    <h3>Hard stop</h3>
+    <p class="section-lede">
+      A shared confirmed carrier stays visible on the donor.
+      Other differences, such as CMV, quarantine, ID release, and family limit, are notes on the profile.
+      A counselor visit is an optional review, not the center of the journey.
+    </p>
   </section>
 </div>
 {% endblock %}

@@ -41,7 +41,7 @@
           {% if result.hard_stop %}
           <p class="match-status match-status-stop">Blocked · carrier conflict</p>
           {% else %}
-          <p class="match-status">Medical rank {{ result.score }}</p>
+          <p class="match-status">No shared carrier conflict</p>
           {% endif %}
         </div>
         {% if sentences %}
@@ -52,7 +52,7 @@
           {% endfor %}
         </ul>
         {% else %}
-        <p class="help">No counselor report yet. The counselor runs the AI tool during the visit.</p>
+        <p class="help">No counselor report yet. The counselor can write one from the records on this visit.</p>
         {% endif %}
       </div>
     </article>

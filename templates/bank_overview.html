@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block body %}
+<section class="page-intro">
+  <p class="eyebrow">Sperm bank</p>
+  <h1>Overview</h1>
+  <p class="lede">Counts come from donor records, sample flags, and recipient shortlists or counselor visits.</p>
+</section>
+
+<div class="stat-grid">
+  <article class="stat">
+    <p class="stat-value">{{ donors|length }}</p>
+    <p class="stat-label">Donor records</p>
+  </article>
+  <article class="stat">
+    <p class="stat-value">{{ available_count }}</p>
+    <p class="stat-label">Cleared for discovery</p>
+  </article>
+  <article class="stat">
+    <p class="stat-value">{{ no_sample|length }}</p>
+    <p class="stat-label">No sample analysis</p>
+  </article>
+  <article class="stat">
+    <p class="stat-value">{{ attention|length }}</p>
+    <p class="stat-label">Needs attention</p>
+  </article>
+  <article class="stat">
+    <p class="stat-value">{{ selection_count }}</p>
+    <p class="stat-label">Recipient selections</p>
+  </article>
+</div>
+
+<section class="landing-section">
+  <h2>Donors by stage</h2>
+  {% if stage_counts %}
+  <ul class="records">
+    {% for label, count in stage_counts.items() %}
+    <li><span>{{ label }}</span><strong>{{ count }}</strong></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">No donor records yet.</p>
+  {% endif %}
+</section>
+
+<section class="landing-section">
+  <h2>Needs attention</h2>
+  <p class="help">In quarantine, or a motility result below the WHO lower reference limits.</p>
+  {% if attention %}
+  <ul class="records">
+    {% for donor in attention %}
+    <li>
+      <a href="/bank/donors/{{ donor.id }}#samples">{{ donor.code }}</a>
+      <span class="meta">{{ quarantine_labels[donor.quarantine] }} · {{ donor_stage(donor).sample_review }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">Nothing flagged.</p>
+  {% endif %}
+</section>
+
+<section class="landing-section">
+  <h2>Recent records</h2>
+  {% if donors %}
+  <ul class="records">
+    {% for donor in donors %}
+    <li>
+      <a href="/bank/donors/{{ donor.id }}">{{ donor.code }}</a>
+      <span class="meta">{{ donor_stage(donor).current }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">Add a donor to start the lifecycle.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -21,25 +21,38 @@ from app.seed import seed_demo
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # * SQLite create_all does not add columns to existing tables.
-_DONOR_COLUMN_DDL = (
-    ("motility_total_pct", "FLOAT"),
-    ("motility_progressive_pct", "FLOAT"),
-    ("motility_video_url", "VARCHAR(255) DEFAULT ''"),
+_SQLITE_COLUMN_DDL = (
+    ("donors", "motility_total_pct", "FLOAT"),
+    ("donors", "motility_progressive_pct", "FLOAT"),
+    ("donors", "motility_video_url", "VARCHAR(255) DEFAULT ''"),
+    ("donors", "motility_below_reference", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("users", "paid_at", "DATETIME"),
+    ("users", "stripe_checkout_session_id", "VARCHAR(255)"),
 )
 
 
 def _ensure_sqlite_columns(engine) -> None:
-    """Add missing donor columns after model changes on an existing SQLite file."""
+    """Add columns introduced after an existing SQLite file was created."""
     with engine.begin() as conn:
-        existing = {
-            row[1]
-            for row in conn.exec_driver_sql("PRAGMA table_info(donors)").fetchall()
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
         }
-        if not existing:
-            return
-        for name, sql_type in _DONOR_COLUMN_DDL:
+        for table, name, sql_type in _SQLITE_COLUMN_DDL:
+            if table not in tables:
+                continue
+            existing = {
+                row[1]
+                for row in conn.exec_driver_sql(
+                    f"PRAGMA table_info({table})"
+                ).fetchall()
+            }
             if name not in existing:
-                conn.exec_driver_sql(f"ALTER TABLE donors ADD COLUMN {name} {sql_type}")
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"
+                )
 
 
 def _appointments_slot_id_is_unique(conn) -> bool:
@@ -161,7 +174,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             session.close()
 
-    app = FastAPI(title="Donor Match")
+    app = FastAPI(title="Conceiva")
     app.state.settings = settings
     app.state.session_factory = factory
     app.add_middleware(DatabaseMiddleware)

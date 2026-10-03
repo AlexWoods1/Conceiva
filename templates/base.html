@@ -3,28 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{% block title %}Donor Match{% endblock %}</title>
+    <title>{% block title %}Conceiva{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
-  <body>
+  <body class="role-{{ user.role if user else 'public' }}">
     <header class="site-header">
-      <a class="brand" href="/">Donor Match</a>
+      <a class="brand" href="/">Conceiva</a>
       <nav class="nav">
         {% if user and user.consent_at and user.role == "couple" %}
-        <a href="/couple/history">History</a>
-        <a href="/couple/carriers">Carriers</a>
-        <a href="/couple/survey/clinical">Clinical survey</a>
-        <a href="/couple/survey/preferences">Preferences</a>
-        <a href="/match">Matches</a>
-        <a href="/couple/shortlist">Shortlist</a>
-        <a href="/couple/book">Book</a>
-        <a href="/couple/appointments">Visits</a>
+        <a href="/match" {% if request.url.path == '/match' or request.url.path.startswith('/match/') %}class="is-active"{% endif %}>Discover</a>
+        <a href="/couple/shortlist" {% if request.url.path == '/couple/shortlist' %}class="is-active"{% endif %}>Shortlist</a>
+        <a href="/couple/journey" {% if request.url.path == '/couple/journey' %}class="is-active"{% endif %}>My Journey</a>
         {% elif user and user.consent_at and user.role == "bank" %}
-        <a href="/bank">Donors</a>
-        <a href="/bank/catalog">Catalog</a>
+        <a href="/bank/overview" {% if request.url.path == '/bank/overview' %}class="is-active"{% endif %}>Overview</a>
+        <a href="/bank" {% if request.url.path == '/bank' %}class="is-active"{% endif %}>Donors</a>
+        <a href="/bank/collections" {% if request.url.path == '/bank/collections' %}class="is-active"{% endif %}>Collections</a>
+        <a href="/bank/inventory" {% if request.url.path == '/bank/inventory' %}class="is-active"{% endif %}>Inventory</a>
+        <a href="/bank/orders" {% if request.url.path == '/bank/orders' %}class="is-active"{% endif %}>Orders</a>
         {% elif user and user.consent_at and user.role == "counselor" %}
-        <a href="/counselor">Visits</a>
-        <a href="/counselor/slots">Availability</a>
+        <a href="/counselor" {% if request.url.path == '/counselor' or request.url.path.startswith('/counselor/appointments') %}class="is-active"{% endif %}>Visits</a>
+        <a href="/counselor/slots" {% if request.url.path == '/counselor/slots' %}class="is-active"{% endif %}>Availability</a>
         {% endif %}
         {% if user %}
         <a href="/account">Account</a>
@@ -49,7 +47,7 @@
         <a href="/privacy">Privacy</a>
         <a href="/contact">Contact</a>
       </nav>
-      <p>Decision support on records you supply. Not a diagnosis and not a prediction of a child.</p>
+      <p>Conceiva connects donor records, intended parents, and the clinic path. Decision support on records you supply. Not a diagnosis and not a prediction of a child.</p>
     </footer>
   </body>
 </html>

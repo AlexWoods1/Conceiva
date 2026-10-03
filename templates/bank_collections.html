@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Collections{% endblock %}
+{% block body %}
+<section class="page-intro">
+  <p class="eyebrow">Collections</p>
+  <h1>Samples and analysis</h1>
+  <p class="lede">
+    The stored unit is the donor record, not a vial.
+    Donor, then sample upload, then analysis, then the lab flag.
+  </p>
+</section>
+{% if donors %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Donor</th>
+      <th>Total motility</th>
+      <th>Progressive</th>
+      <th>Review</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for donor in donors %}
+    {% set stage = donor_stage(donor) %}
+    <tr>
+      <td><a href="/bank/donors/{{ donor.id }}#samples">{{ donor.code }}</a></td>
+      <td>{% if donor.motility_total_pct is not none %}{{ "%.1f"|format(donor.motility_total_pct) }}%{% else %}—{% endif %}</td>
+      <td>{% if donor.motility_progressive_pct is not none %}{{ "%.1f"|format(donor.motility_progressive_pct) }}%{% else %}—{% endif %}</td>
+      <td>{{ stage.sample_review }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="empty-state">No donor records yet.</p>
+{% endif %}
+{% endblock %}

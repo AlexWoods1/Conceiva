@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}My Journey{% endblock %}
+{% block body %}
+<section class="page-intro">
+  <p class="eyebrow">Intended parent</p>
+  <h1>My Journey</h1>
+  <p class="lede">You are at <strong>{{ current }}</strong>. Later steps stay open until the product stores them.</p>
+</section>
+
+<ol class="lifecycle">
+  {% for step in steps %}
+  <li class="{% if step.done %}is-done{% elif step.label == current %}is-current{% endif %}">
+    <span class="lifecycle-mark"></span>
+    <span>{{ step.label }}</span>
+  </li>
+  {% endfor %}
+</ol>
+
+<div class="rows">
+  {% for step in steps %}
+  <article class="panel">
+    <p class="eyebrow">{% if step.done %}Done{% elif step.label == current %}Now{% else %}Later{% endif %}</p>
+    <h2>{{ step.label }}</h2>
+    <p>{{ step.detail }}</p>
+    {% if step.href %}
+    <p><a href="{{ step.href }}">Open</a></p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+
+<section class="landing-section">
+  <h2>Records on file</h2>
+  <ul class="plain">
+    <li>Carrier results: {{ carrier_count }}</li>
+    <li>Preferences: {% if survey and survey.preferences_done %}saved{% else %}not saved yet{% endif %}</li>
+    <li>Shortlist: {{ shortlist_count }} of {{ max_shortlist }}</li>
+    <li>Counselor visits: {{ appointments|length }}</li>
+  </ul>
+  <p class="help">
+    <a href="/couple/history">History</a> ·
+    <a href="/couple/carriers">Carriers</a> ·
+    <a href="/couple/survey/clinical">Clinical survey</a> ·
+    <a href="/couple/survey/preferences">Preferences</a> ·
+    <a href="/couple/appointments">Visits</a>
+  </p>
+</section>
+{% endblock %}

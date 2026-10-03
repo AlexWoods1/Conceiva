@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Donor journey{% endblock %}
+{% block body %}
+<section class="page-intro">
+  <p class="eyebrow">Donor</p>
+  <h1>Your path is the bank's donor record</h1>
+  <p class="lede">
+    Conceiva does not have a separate donor login. The sperm bank holds the application,
+    screening, sample analysis, and clearance on your donor record. When that record is
+    cleared, intended parents can see it in Discover.
+  </p>
+</section>
+
+<nav class="subnav" aria-label="Donor journey">
+  <a href="#application">Application</a>
+  <a href="#screening">Screening</a>
+  <a href="#samples">Samples</a>
+  <a href="#status">Status</a>
+</nav>
+
+<ol class="lifecycle">
+  <li class="is-current"><span class="lifecycle-mark"></span><span>Application</span></li>
+  <li><span class="lifecycle-mark"></span><span>Screening</span></li>
+  <li><span class="lifecycle-mark"></span><span>Sample analysis</span></li>
+  <li><span class="lifecycle-mark"></span><span>Cleared</span></li>
+  <li><span class="lifecycle-mark"></span><span>In discovery</span></li>
+</ol>
+<p class="help">This indicator is the shape of the record. It is not your personal status.</p>
+
+<div class="stack stack-wide">
+  <article class="panel" id="application">
+    <h2>Application</h2>
+    <p>The bank creates the donor record: code, blood type, Rh, ancestry context, and ID-release policy.</p>
+  </article>
+  <article class="panel" id="screening">
+    <h2>Screening</h2>
+    <p>Carrier results, CMV, the screening panel name, and quarantine live on that same record. A gene you share with an intended parent is a hard stop on their list. It is not hidden.</p>
+  </article>
+  <article class="panel" id="samples">
+    <h2>Samples</h2>
+    <p>The bank can upload a microscopy clip. The existing analysis reports total and progressive motility against WHO lower reference limits. A result below those limits is flagged for lab review. It does not by itself remove the donor.</p>
+  </article>
+  <article class="panel" id="status">
+    <h2>Status</h2>
+    <p>Cleared, confirmed records appear in intended-parent discovery. Family limit on the record is the cap the bank entered. Individual vials, shipments, and clinic appointments are not stored yet.</p>
+    <p><a class="button" href="/login?role=bank">Sperm bank sign in</a></p>
+  </article>
+</div>
+{% endblock %}

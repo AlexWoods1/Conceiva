@@ -1,34 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Donors{% endblock %}
 {% block body %}
-<h1>Donor inventory</h1>
-<p><a href="/bank/donors/new">Add a donor</a> or <a href="/bank/catalog">confirm a public catalog</a>.</p>
+<section class="page-intro">
+  <p class="eyebrow">Donors</p>
+  <h1>Donor records</h1>
+  <p>
+    <a class="button" href="/bank/donors/new">Add a donor</a>
+    <a class="button button-ghost" href="/bank/catalog">Import a catalog</a>
+  </p>
+</section>
 {% if donors %}
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
       <th>Code</th>
-      <th>Ancestry context</th>
+      <th>Stage</th>
       <th>CMV</th>
       <th>Quarantine</th>
+      <th>Sample</th>
       <th>Family limit</th>
-      <th>ID release</th>
     </tr>
   </thead>
   <tbody>
     {% for donor in donors %}
+    {% set stage = donor_stage(donor) %}
     <tr>
       <td><a href="/bank/donors/{{ donor.id }}">{{ donor.code }}</a></td>
-      <td>{{ donor.ancestry }}</td>
-      <td>{{ donor.cmv }}</td>
-      <td>{{ donor.quarantine }}</td>
+      <td><span class="status-pill {% if stage.available %}status-booked{% endif %}">{{ stage.current }}</span></td>
+      <td>{{ cmv_status_labels[donor.cmv] }}</td>
+      <td>{{ quarantine_labels[donor.quarantine] }}</td>
+      <td>{{ stage.sample_review }}</td>
       <td>{{ donor.family_limit }}</td>
-      <td>{{ donor.id_release_policy }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-<p>No donors yet.</p>
+<p class="empty-state">No donors yet.</p>
 {% endif %}
 {% endblock %}
