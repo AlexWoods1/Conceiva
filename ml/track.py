@@ -42,7 +42,6 @@ def _ffmpeg_bin() -> str:
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 
-
 def running_category(points, fps):
     """Motility category from a track's points so far, or None when the track
     is still too short to judge.
