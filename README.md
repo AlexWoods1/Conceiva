@@ -8,7 +8,7 @@ It is not a diagnosis and not a prediction of a child.
 
 ```bash
 uv sync
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+uv run --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Demo couple: `couple@demo.local` / `demo-couple`
@@ -36,9 +36,8 @@ Set these in the Vercel project environment:
 | `SESSION_SECRET` | **Yes** | Non-default value. App refuses to start without it. |
 | `SEED_ON_EMPTY` | Optional | Default `true`. Demo accounts upsert if missing. |
 | `STRIPE_*` | Leave unset | Matches stay free for the demo. |
-| `MOTILITY_UPLOADS_ENABLED` | Optional | Default `true`. Upload form stays available. |
-| `MOTILITY_DEMO_FALLBACK` | Optional | Default `true`. Vercel uses precomputed sample clips. |
-| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | Local only | Live ML service on a long-lived host. |
+| `MOTILITY_UPLOADS_ENABLED` | Leave unset | Defaults off on Vercel (ML backend is separate). |
+| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | Local / long-lived host only | Live analyze service. |
 
 SQLite on Vercel lives under `/tmp`. Data can reset when instances recycle. Demo logins are shared across judges.
 
@@ -56,11 +55,27 @@ See `.env.example` for the full list. The app reads environment variables only, 
 uv run --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-## Motility (local / long-lived host)
+## Motility backend (local)
 
-Bank video upload stays available everywhere. On Vercel (and whenever the ML
-service is down), the app applies a precomputed sample clip under
-`/static/motility/` so the Motility test UI still completes. For a live YOLO
-analysis, run the separate motility service (`backend/`) locally and point
-`MOTILITY_SERVICE_URL` at it; filenames containing `low` map to the
-low-motility sample when falling back.
+Bank uploads POST the video to a separate FastAPI service in `backend/` that runs YOLO tracking. That service is not part of the Vercel deploy.
+
+```bash
+uv sync --group motility
+uv run --group motility python -m backend
+```
+
+Or explicitly:
+
+```bash
+$env:MOTILITY_SERVICE_DEV="1"
+uv run --group motility uvicorn backend.main:app --host 127.0.0.1 --port 8010
+```
+
+In `.env` for the main app (same machine):
+
+```
+MOTILITY_SERVICE_URL=http://127.0.0.1:8010
+MOTILITY_SERVICE_DEV=1
+```
+
+Or set the same `MOTILITY_SERVICE_API_KEY` on both processes. Check `GET http://127.0.0.1:8010/health` before uploading from the bank donor page. Analysis takes 1-2 minutes on CPU.

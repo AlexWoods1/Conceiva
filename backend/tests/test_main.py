@@ -31,6 +31,13 @@ def client(monkeypatch, tmp_path):
     return TestClient(main.app)
 
 
+def test_health_reports_auth_mode(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert response.json()["auth"] == "api_key"
+
+
 def test_rejects_requests_with_no_api_key(client):
     response = client.post("/analyze", files={"video": ("a.mp4", b"x", "video/mp4")})
     assert response.status_code == 401

@@ -3,9 +3,10 @@
 from pathlib import Path
 
 import httpx
+import pytest
 
 from app.config import Settings
-from app.motility_client import analyze_donor_video
+from app.motility_client import MotilityServiceError, analyze_donor_video
 
 
 def _settings(**overrides) -> Settings:
@@ -47,39 +48,37 @@ def test_analyze_donor_video_posts_the_file_and_returns_the_result():
     assert result == payload
 
 
-def test_analyze_donor_video_returns_none_when_the_service_is_unreachable(caplog):
+def test_analyze_donor_video_raises_when_the_service_is_unreachable():
     def handler(_request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        result = analyze_donor_video(
-            b"fake video bytes", "sample.mp4", _settings(), client
-        )
-
-    assert result is None
-    assert "Motility analysis failed" in caplog.text
+        with pytest.raises(MotilityServiceError, match="unreachable"):
+            analyze_donor_video(b"fake video bytes", "sample.mp4", _settings(), client)
 
 
-def test_analyze_donor_video_returns_none_on_a_server_error():
+def test_analyze_donor_video_raises_on_a_server_error():
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(503, json={"detail": "down"})
+        return httpx.Response(503, json={"detail": "pipeline deps missing"})
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        result = analyze_donor_video(
-            b"fake video bytes", "sample.mp4", _settings(), client
+        with pytest.raises(MotilityServiceError, match="pipeline deps missing"):
+            analyze_donor_video(b"fake video bytes", "sample.mp4", _settings(), client)
+
+
+def test_analyze_donor_video_sends_api_key_header():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["key"] = request.headers.get("x-api-key")
+        return httpx.Response(200, json={"summary": {}})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        analyze_donor_video(
+            b"x",
+            "a.mp4",
+            _settings(motility_service_api_key="secret-key"),
+            client,
         )
 
-    assert result is None
-
-
-def test_demo_motility_result_picks_sample_by_filename():
-    from app.motility_client import demo_motility_result
-
-    ok = demo_motility_result("clip.mp4")
-    assert ok["annotated_video_url"] == "/static/motility/demo-tracked.mp4"
-    assert ok["summary"]["total_motility_percent"] > 40
-    assert ok["demo_fallback"] is True
-
-    low = demo_motility_result("clip_low.mp4")
-    assert low["annotated_video_url"] == "/static/motility/demo-low-tracked.mp4"
-    assert low["summary"]["total_motility_percent"] < 42
+    assert seen["key"] == "secret-key"
