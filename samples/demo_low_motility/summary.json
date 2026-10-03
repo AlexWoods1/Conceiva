@@ -1,0 +1,26 @@
+{
+  "summary": {
+    "fps": 50.0,
+    "microns_per_pixel": 0.21739130434782608,
+    "scale_is_approximate": true,
+    "num_tracks_analyzed": 150,
+    "cluster_count": 1,
+    "detection_class_counts": {
+      "sperm": 142,
+      "cluster": 1,
+      "small_or_pinhead": 8
+    },
+    "percent_progressive": 12.666666666666668,
+    "percent_non_progressive": 15.333333333333332,
+    "percent_immotile": 72.0,
+    "total_motility_percent": 28.0,
+    "mean_vcl": 5.157063692220263,
+    "mean_vsl": 2.3585937420333196
+  },
+  "annotated_video_path": "samples/demo_low_motility/tracked.mp4",
+  "who_reference": {
+    "progressive_motility_min_pct": 30,
+    "total_motility_min_pct": 42
+  },
+  "disclaimer": "Research and education demo only. Not a diagnostic tool and does not replace a clinical semen analysis."
+}

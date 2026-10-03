@@ -9,13 +9,42 @@ from collections import defaultdict, deque
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pandas as pd
 from ultralytics import YOLO
 
 import config
+from motility import classify_track
 
-TRAIL_COLOR = (0, 215, 255)
-BOX_COLOR = (0, 255, 0)
+# BGR. A track is drawn in its running motility category's color, so a viewer
+# can see which sperm are moving well and which are not as the clip plays.
+CATEGORY_COLORS = {
+    "progressive": (0, 220, 0),
+    "non_progressive": (0, 220, 220),
+    "immotile": (0, 0, 230),
+}
+UNCLASSIFIED_COLOR = (170, 170, 170)
+
+
+def running_category(points, fps):
+    """Motility category from a track's points so far, or None when the track
+    is still too short to judge.
+
+    This is a live approximation: it reclassifies on each frame from the
+    history available at that moment, so early in a track the category can
+    change. The summary numbers are computed separately in motility.py from
+    whole tracks, and those are the ones reported.
+    """
+    if len(points) < 2:
+        return None
+    duration_sec = (points[-1][0] - points[0][0]) / fps
+    if duration_sec < config.MIN_TRACK_SECONDS:
+        return None
+    xs = np.array([p[1] for p in points]) * config.MICRONS_PER_PIXEL
+    ys = np.array([p[2] for p in points]) * config.MICRONS_PER_PIXEL
+    vcl = np.hypot(np.diff(xs), np.diff(ys)).sum() / duration_sec
+    vsl = np.hypot(xs[-1] - xs[0], ys[-1] - ys[0]) / duration_sec
+    return classify_track(vcl, vsl)
 
 
 def _require_local_video_file(video_path):
@@ -29,6 +58,29 @@ def _require_local_video_file(video_path):
             f"video_path must be an existing local file, got: {video_path!r}"
         )
     return path
+
+
+LEGEND = [
+    ("progressive", "progressive"),
+    ("non_progressive", "non-progressive"),
+    ("immotile", "immotile"),
+]
+
+
+def _draw_legend(img):
+    """Color key burned into the clip, so the overlay reads on its own."""
+    for row, (category, label) in enumerate(LEGEND):
+        y = 15 + row * 16
+        cv2.circle(img, (12, y - 4), 4, CATEGORY_COLORS[category], -1)
+        cv2.putText(
+            img,
+            label,
+            (24, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            CATEGORY_COLORS[category],
+            1,
+        )
 
 
 def run_tracker(video_path, model):
@@ -84,6 +136,8 @@ def track_video(video_path, out_csv, out_video, model=None):
     )
 
     trails = defaultdict(lambda: deque(maxlen=config.TRAIL_LENGTH))
+    full_history = defaultdict(list)  # unbounded, the trail deque is display-only
+    categories = {}
     rows = []
 
     for frame_idx, detections, img in run_tracker(str(video_path), model):
@@ -98,23 +152,28 @@ def track_video(video_path, out_csv, out_video, model=None):
                 }
             )
             trails[track_id].append((int(x), int(y)))
+            full_history[track_id].append((frame_idx, x, y))
+            categories[track_id] = running_category(full_history[track_id], fps)
 
         for track_id, points in trails.items():
+            color = CATEGORY_COLORS.get(categories.get(track_id), UNCLASSIFIED_COLOR)
             for p1, p2 in zip(points, list(points)[1:]):
-                cv2.line(img, p1, p2, TRAIL_COLOR, 1)
+                cv2.line(img, p1, p2, color, 1)
 
         for track_id, cls_id, x, y in detections:
-            cv2.circle(img, (int(x), int(y)), 3, BOX_COLOR, -1)
+            color = CATEGORY_COLORS.get(categories.get(track_id), UNCLASSIFIED_COLOR)
+            cv2.circle(img, (int(x), int(y)), 3, color, -1)
             cv2.putText(
                 img,
                 str(track_id),
                 (int(x) + 5, int(y) - 5),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.4,
-                BOX_COLOR,
+                color,
                 1,
             )
 
+        _draw_legend(img)
         writer.write(img)
 
     writer.release()
