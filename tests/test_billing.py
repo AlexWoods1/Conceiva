@@ -127,7 +127,9 @@ def test_webhook_ignores_bank_accounts(make_app, render_stub, monkeypatch):
             "app.routes.parse_webhook_event",
             lambda settings, payload, signature: event,
         )
-        api.client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "x"})
+        api.client.post(
+            "/webhooks/stripe", content=b"{}", headers={"stripe-signature": "x"}
+        )
         assert _user(api, "bank@example.com").paid_at is None
 
 

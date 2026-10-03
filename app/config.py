@@ -92,7 +92,7 @@ def load_settings() -> Settings:
         stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", "").strip(),
         stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip(),
         stripe_price_id=os.environ.get("STRIPE_PRICE_ID", "").strip(),
-        app_base_url=os.environ.get(
-            "APP_BASE_URL", "http://127.0.0.1:8000"
-        ).rstrip("/"),
+        app_base_url=os.environ.get("APP_BASE_URL", "http://127.0.0.1:8000").rstrip(
+            "/"
+        ),
     )

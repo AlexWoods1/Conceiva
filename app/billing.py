@@ -64,7 +64,9 @@ def mark_user_paid(
         user.stripe_checkout_session_id = checkout_session_id
 
 
-def fulfill_checkout_session(db: Session, session: stripe.checkout.Session) -> User | None:
+def fulfill_checkout_session(
+    db: Session, session: stripe.checkout.Session
+) -> User | None:
     """Unlock the couple user referenced by a completed Checkout Session.
 
     Args:
