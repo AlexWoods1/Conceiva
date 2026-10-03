@@ -39,6 +39,8 @@ class Settings:
     seed_on_empty: bool
     secure_cookies: bool = False
     contact_email: str = "privacy@example.com"
+    motility_service_url: str = "http://localhost:8010"
+    motility_service_api_key: str = ""
 
 
 def load_settings() -> Settings:
@@ -74,4 +76,8 @@ def load_settings() -> Settings:
         seed_on_empty=_as_bool("SEED_ON_EMPTY", "true"),
         secure_cookies=on_vercel,
         contact_email=contact_email or "privacy@example.com",
+        motility_service_url=os.environ.get(
+            "MOTILITY_SERVICE_URL", "http://localhost:8010"
+        ).rstrip("/"),
+        motility_service_api_key=os.environ.get("MOTILITY_SERVICE_API_KEY", ""),
     )
