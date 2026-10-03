@@ -27,6 +27,12 @@ _SQLITE_COLUMN_DDL: dict[str, tuple[tuple[str, str], ...]] = {
         ("motility_progressive_pct", "FLOAT"),
         ("motility_video_url", "VARCHAR(255) DEFAULT ''"),
         ("motility_below_reference", "BOOLEAN DEFAULT 0"),
+        ("hair_color", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ("hair_type", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ("eye_color", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ("height_cm", "INTEGER"),
+        ("weight_kg", "INTEGER"),
+        ("ethnicity", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ),
     "users": (
         ("paid_at", "DATETIME"),

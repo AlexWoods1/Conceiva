@@ -36,6 +36,27 @@
     {% endfor %}
   </ul>
 
+  <section class="traits-block">
+    <h2>Physical traits</h2>
+    <p class="help">As the bank recorded them. These do not change the medical rank.</p>
+    <dl class="trait-list">
+      <dt>Hair</dt>
+      <dd>{{ ((donor.hair_color ~ " " ~ donor.hair_type)|trim|capitalize) or "Not recorded" }}</dd>
+      <dt>Eyes</dt>
+      <dd>{{ donor.eye_color|capitalize if donor.eye_color else "Not recorded" }}</dd>
+      <dt>Height</dt>
+      <dd>{{ format_height(donor.height_cm) or "Not recorded" }}</dd>
+      <dt>Weight</dt>
+      <dd>{{ format_weight(donor.weight_kg) or "Not recorded" }}</dd>
+      <dt>BMI</dt>
+      <dd>{{ donor.bmi if donor.bmi is not none else "Not recorded" }}</dd>
+      <dt>Blood type</dt>
+      <dd>{{ donor.blood_type or "Not recorded" }}{% if donor.rh %} {{ rh_labels[donor.rh] }}{% endif %}</dd>
+      <dt>Ethnicity (donor-reported)</dt>
+      <dd>{{ donor.ethnicity or "Not recorded" }}</dd>
+    </dl>
+  </section>
+
   <section class="explain-block">
     <div class="explain-head">
       <div>

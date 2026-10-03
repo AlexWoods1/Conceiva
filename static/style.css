@@ -375,6 +375,27 @@ label.check-card { font-weight: 400; margin: 0; }
   max-width: 40rem;
 }
 
+.trait-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+  margin: 1rem 0;
+}
+.trait-filters .help { flex-basis: 100%; }
+.trait-filters label { display: grid; gap: 0.25rem; }
+.trait-filters input { width: 7rem; }
+
+.traits-block { max-width: 40rem; margin: 1.5rem 0; }
+.trait-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1.25rem;
+  margin: 0.75rem 0 0;
+}
+.trait-list dt { color: var(--muted); }
+.trait-list dd { margin: 0; }
+
 .explain-head {
   display: flex;
   flex-wrap: wrap;

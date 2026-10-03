@@ -46,6 +46,51 @@ DEMO_BLURBS = {
     ),
 }
 
+# * Synthetic physical traits. DN-630 leaves height and weight blank on purpose.
+DEMO_TRAITS = {
+    "DN-100": {
+        "hair_color": "blond",
+        "hair_type": "straight",
+        "eye_color": "blue",
+        "height_cm": 185,
+        "weight_kg": 80,
+        "ethnicity": "Northern European",
+    },
+    "DN-240": {
+        "hair_color": "brown",
+        "hair_type": "wavy",
+        "eye_color": "green",
+        "height_cm": 178,
+        "weight_kg": 74,
+        "ethnicity": "Northern European",
+    },
+    "DN-310": {
+        "hair_color": "black",
+        "hair_type": "straight",
+        "eye_color": "brown",
+        "height_cm": 175,
+        "weight_kg": 70,
+        "ethnicity": "East Asian",
+    },
+    "DN-410": {
+        "hair_color": "brown",
+        "hair_type": "curly",
+        "eye_color": "hazel",
+        "height_cm": 172,
+        "weight_kg": 77,
+        "ethnicity": "Ashkenazi Jewish",
+    },
+    "DN-520": {
+        "hair_color": "black",
+        "hair_type": "wavy",
+        "eye_color": "brown",
+        "height_cm": 180,
+        "weight_kg": 95,
+        "ethnicity": "East Asian",
+    },
+    "DN-630": {"hair_color": "red", "hair_type": "curly", "eye_color": "blue"},
+}
+
 
 def seed_demo(db: Session) -> None:
     """Insert the demo bank, donors, couple, counselor, and open slots.
@@ -180,6 +225,9 @@ def seed_demo(db: Session) -> None:
             catalog_confirmed=True,
         ),
     ]
+    for donor in donors:
+        for name, value in DEMO_TRAITS.get(donor.code, {}).items():
+            setattr(donor, name, value)
     db.add_all(donors)
     db.flush()
     db.add(
