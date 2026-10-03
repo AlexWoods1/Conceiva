@@ -187,7 +187,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             session.close()
 
-    app = FastAPI(title="Donor Match")
+    app = FastAPI(title="Conceiva")
     app.state.settings = settings
     app.state.session_factory = factory
     app.add_middleware(DatabaseMiddleware)
