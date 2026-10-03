@@ -65,6 +65,36 @@ def test_motility_upload_stores_the_result(api, monkeypatch):
     body = page.json()
     assert body["motility_total_pct"] == 48.3
     assert body["motility_progressive_pct"] == 34.2
+    db = api.session()
+    try:
+        donor = db.get(Donor, donor_id)
+        assert (
+            donor.motility_video_url == "http://localhost:8010/videos/abc/tracked.mp4"
+        )
+    finally:
+        db.close()
+
+
+def test_motility_upload_disabled_returns_clear_error(api, monkeypatch):
+    from dataclasses import replace
+
+    api.app.state.settings = replace(
+        api.app.state.settings, motility_uploads_enabled=False
+    )
+    _consent(api, "bank@example.com", role="bank")
+    donor_id = _create_donor(api)
+
+    def _fail(*_args, **_kwargs):
+        raise AssertionError("analyze should not run when uploads are disabled")
+
+    monkeypatch.setattr("app.routes.analyze_donor_video", _fail)
+    response = api.client.post(
+        f"/bank/donors/{donor_id}/motility",
+        data={"csrf": api.csrf},
+        files={"video": ("sample.mp4", b"fake video bytes", "video/mp4")},
+    )
+    assert response.status_code == 503
+    assert "disabled" in response.json()["error"].lower()
 
 
 def test_motility_upload_shows_an_error_when_the_service_is_down(api, monkeypatch):
@@ -153,3 +183,43 @@ def test_motility_upload_requires_a_file(api):
 
     response = api.post(f"/bank/donors/{donor_id}/motility", {})
     assert response.status_code == 400
+
+
+def test_who_boundary_values_are_not_flagged(api, monkeypatch):
+    # * Exact WHO lower reference limits are inclusive of the reference floor.
+    _consent(api, "bank@example.com", role="bank")
+    donor_id = _create_donor(api)
+
+    _upload(api, donor_id, monkeypatch, total=42.0, progressive=30.0)
+
+    db = api.session()
+    try:
+        assert db.get(Donor, donor_id).motility_below_reference is False
+    finally:
+        db.close()
+
+
+def test_just_below_who_total_boundary_is_flagged(api, monkeypatch):
+    _consent(api, "bank@example.com", role="bank")
+    donor_id = _create_donor(api)
+
+    _upload(api, donor_id, monkeypatch, total=41.9, progressive=30.0)
+
+    db = api.session()
+    try:
+        assert db.get(Donor, donor_id).motility_below_reference is True
+    finally:
+        db.close()
+
+
+def test_just_below_who_progressive_boundary_is_flagged(api, monkeypatch):
+    _consent(api, "bank@example.com", role="bank")
+    donor_id = _create_donor(api)
+
+    _upload(api, donor_id, monkeypatch, total=42.0, progressive=29.9)
+
+    db = api.session()
+    try:
+        assert db.get(Donor, donor_id).motility_below_reference is True
+    finally:
+        db.close()

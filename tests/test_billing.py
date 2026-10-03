@@ -158,3 +158,182 @@ def test_stripe_disabled_leaves_matches_open(api):
     page = api.get("/match")
     assert page.status_code == 200
     assert page.json()["template"] == "match_list.html"
+
+
+def _settings(**overrides):
+    from pathlib import Path
+
+    from app.config import Settings
+
+    values = {
+        "database_path": Path("unused.db"),
+        "session_secret": "test",
+        "llm_api_key": "",
+        "llm_base_url": "https://llm.example/v1",
+        "llm_model": "test-model",
+        "enable_face_compare": False,
+        "seed_on_empty": False,
+        "stripe_secret_key": "sk_test_x",
+        "stripe_webhook_secret": "whsec_test",
+        "stripe_price_id": "price_test",
+        "app_base_url": "http://testserver",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def _db_user(db, email: str, role: str = "couple") -> User:
+    from app.security import hash_password
+
+    user = User(email=email, password_hash=hash_password("password1"), role=role)
+    db.add(user)
+    db.commit()
+    return user
+
+
+def test_mark_user_paid_is_idempotent(db):
+    from app.billing import mark_user_paid
+
+    user = _db_user(db, "couple@example.com")
+    mark_user_paid(db, user, checkout_session_id="cs_first")
+    db.commit()
+    first_paid_at = user.paid_at
+    assert first_paid_at is not None
+
+    mark_user_paid(db, user, checkout_session_id="cs_second")
+    db.commit()
+    assert user.paid_at == first_paid_at
+    assert user.stripe_checkout_session_id == "cs_second"
+
+
+def test_fulfill_checkout_session_resolves_metadata_and_rejects_bad_targets(db):
+    from app.billing import fulfill_checkout_session
+
+    couple = _db_user(db, "couple@example.com")
+    bank = _db_user(db, "bank@example.com", role="bank")
+
+    assert (
+        fulfill_checkout_session(
+            db, SimpleNamespace(id="cs_a", client_reference_id=None, metadata={})
+        )
+        is None
+    )
+    assert (
+        fulfill_checkout_session(
+            db, SimpleNamespace(id="cs_b", client_reference_id="not-int", metadata={})
+        )
+        is None
+    )
+    assert (
+        fulfill_checkout_session(
+            db,
+            SimpleNamespace(id="cs_c", client_reference_id="99999", metadata={}),
+        )
+        is None
+    )
+    assert (
+        fulfill_checkout_session(
+            db,
+            SimpleNamespace(
+                id="cs_d",
+                client_reference_id=str(bank.id),
+                metadata={"user_id": str(bank.id)},
+            ),
+        )
+        is None
+    )
+
+    unlocked = fulfill_checkout_session(
+        db,
+        SimpleNamespace(
+            id="cs_meta",
+            client_reference_id=None,
+            metadata={"user_id": str(couple.id)},
+        ),
+    )
+    db.commit()
+    assert unlocked is not None
+    assert unlocked.id == couple.id
+    assert unlocked.paid_at is not None
+    assert unlocked.stripe_checkout_session_id == "cs_meta"
+
+
+def test_handle_webhook_event_ignores_other_types(db):
+    from app.billing import handle_webhook_event
+
+    user = _db_user(db, "couple@example.com")
+    event = {
+        "type": "invoice.paid",
+        "data": {
+            "object": SimpleNamespace(
+                id="cs_invoice",
+                client_reference_id=str(user.id),
+                metadata={},
+            )
+        },
+    }
+
+    assert handle_webhook_event(db, event) is None
+    db.refresh(user)
+    assert user.paid_at is None
+
+
+def test_create_checkout_session_requires_stripe_enabled():
+    from app.billing import create_checkout_session
+
+    user = User(email="couple@example.com", password_hash="x", role="couple")
+    try:
+        create_checkout_session(
+            _settings(stripe_secret_key="", stripe_price_id=""), user
+        )
+    except RuntimeError as exc:
+        assert "Stripe is not configured" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
+def test_retrieve_and_fulfill_requires_paid_status(db, monkeypatch):
+    from app import billing
+
+    couple = _db_user(db, "couple@example.com")
+    settings = _settings()
+
+    monkeypatch.setattr(
+        billing.stripe.checkout.Session,
+        "retrieve",
+        lambda _session_id: SimpleNamespace(
+            id="cs_unpaid",
+            payment_status="unpaid",
+            client_reference_id=str(couple.id),
+            metadata={},
+        ),
+    )
+    assert billing.retrieve_and_fulfill(settings, db, "cs_unpaid") is None
+    db.refresh(couple)
+    assert couple.paid_at is None
+
+    monkeypatch.setattr(
+        billing.stripe.checkout.Session,
+        "retrieve",
+        lambda _session_id: SimpleNamespace(
+            id="cs_paid",
+            payment_status="paid",
+            client_reference_id=str(couple.id),
+            metadata={},
+        ),
+    )
+    unlocked = billing.retrieve_and_fulfill(settings, db, "cs_paid")
+    db.commit()
+    assert unlocked is not None
+    assert unlocked.paid_at is not None
+
+
+def test_parse_webhook_event_requires_secret():
+    from app.billing import parse_webhook_event
+
+    try:
+        parse_webhook_event(_settings(stripe_webhook_secret=""), b"{}", "sig")
+    except RuntimeError as exc:
+        assert "STRIPE_WEBHOOK_SECRET" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")

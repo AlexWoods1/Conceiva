@@ -608,6 +608,27 @@ def delete_appointment_tree(db: Session, appointment_ids: list[int]) -> None:
     db.execute(delete(Appointment).where(Appointment.id.in_(appointment_ids)))
 
 
+def delete_donor(db: Session, donor: Donor) -> None:
+    """Remove a donor and rows that reference it (shortlist, visit links, carriers)."""
+    donor_id = donor.id
+    visit_ids = list(
+        db.scalars(
+            select(AppointmentDonor.appointment_id).where(
+                AppointmentDonor.donor_id == donor_id
+            )
+        )
+    )
+    if visit_ids:
+        delete_appointment_tree(db, visit_ids)
+    db.execute(delete(ShortlistItem).where(ShortlistItem.donor_id == donor_id))
+    db.execute(
+        delete(Carrier).where(
+            Carrier.subject_type == "donor", Carrier.subject_id == donor_id
+        )
+    )
+    db.delete(donor)
+
+
 def delete_account(db: Session, user: User) -> None:
     """Delete genetic fields, surveys, visits, donors, and LLM logs."""
     if user.role == "couple":

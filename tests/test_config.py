@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
-from app.config import PROJECT_ROOT, load_settings
+import pytest
+
+from app.config import DEV_SESSION_SECRET, PROJECT_ROOT, load_settings
 
 
 def test_load_settings_uses_defaults_when_environment_is_empty(monkeypatch):
@@ -19,11 +21,12 @@ def test_load_settings_uses_defaults_when_environment_is_empty(monkeypatch):
     monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
     monkeypatch.delenv("STRIPE_PRICE_ID", raising=False)
     monkeypatch.delenv("APP_BASE_URL", raising=False)
+    monkeypatch.delenv("MOTILITY_UPLOADS_ENABLED", raising=False)
 
     settings = load_settings()
 
     assert settings.database_path == PROJECT_ROOT / "data" / "app.db"
-    assert settings.session_secret == "dev-only-change-me"
+    assert settings.session_secret == DEV_SESSION_SECRET
     assert settings.llm_api_key == ""
     assert settings.llm_base_url == "https://api.openai.com/v1"
     assert settings.llm_model == "gpt-4o-mini"
@@ -34,6 +37,7 @@ def test_load_settings_uses_defaults_when_environment_is_empty(monkeypatch):
     assert settings.stripe_price_id == ""
     assert settings.stripe_enabled is False
     assert settings.app_base_url == "http://127.0.0.1:8000"
+    assert settings.motility_uploads_enabled is True
 
 
 def test_load_settings_reads_environment_overrides(monkeypatch, tmp_path):
@@ -57,7 +61,9 @@ def test_load_settings_reads_environment_overrides(monkeypatch, tmp_path):
 
 def test_vercel_uses_temporary_storage_and_secure_cookies(monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("SESSION_SECRET", "vercel-secret")
     monkeypatch.delenv("DATABASE_PATH", raising=False)
+    monkeypatch.delenv("MOTILITY_UPLOADS_ENABLED", raising=False)
     monkeypatch.setenv("CONTACT_EMAIL", "desk@example.com")
 
     settings = load_settings()
@@ -65,6 +71,14 @@ def test_vercel_uses_temporary_storage_and_secure_cookies(monkeypatch):
     assert settings.database_path == Path("/tmp/donor-match.db")
     assert settings.secure_cookies is True
     assert settings.contact_email == "desk@example.com"
+    assert settings.motility_uploads_enabled is False
+
+
+def test_vercel_rejects_default_session_secret(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="SESSION_SECRET"):
+        load_settings()
 
 
 def test_blank_contact_email_falls_back(monkeypatch):
