@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.formparsers import MultiPartException
 
 from app.constants import (
     ADULT_PHOTO_KEYS,
@@ -111,8 +112,12 @@ def _redirect(path: str) -> RedirectResponse:
     return RedirectResponse(path, status_code=303)
 
 
-async def _form(request: Request):
-    form = await request.form()
+async def _form(request: Request, max_part_size: int | None = None):
+    kwargs = {} if max_part_size is None else {"max_part_size": max_part_size}
+    try:
+        form = await request.form(**kwargs)
+    except MultiPartException as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     expected = request.session.get("csrf")
     if not expected or form.get("csrf") != expected:
         raise HTTPException(status_code=400, detail="CSRF check failed.")
@@ -896,10 +901,9 @@ async def donor_carrier_add(request: Request, donor_id: int):
 @router.post("/bank/donors/{donor_id}/motility")
 async def donor_motility_upload(request: Request, donor_id: int):
     """Analyze an uploaded semen sample video and store the result."""
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_MOTILITY_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Video is too large.")
-    form = await _form(request)
+    # max_part_size is enforced against actual bytes received as they
+    # stream in, not a client-supplied (and therefore spoofable) header.
+    form = await _form(request, max_part_size=MAX_MOTILITY_UPLOAD_BYTES)
     try:
         user = _require_consent(request, "bank")
     except _RedirectNeeded as needed:
