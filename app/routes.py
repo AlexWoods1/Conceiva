@@ -51,7 +51,6 @@ from app.models import (
     AvailabilitySlot,
     Carrier,
     ContactMessage,
-    CounselorProfile,
     Donor,
     User,
 )
@@ -75,6 +74,7 @@ from app.services import (
     counselor_display_name,
     counselors_with_open_slots,
     delete_account,
+    delete_donor,
     find_ranked_donor,
     get_or_create_counselor_profile,
     get_or_create_history,
@@ -377,15 +377,16 @@ async def login_submit(request: Request):
 
 @router.post("/register")
 async def register_submit(request: Request):
-    """Create a couple, sperm-bank, or counselor login."""
+    """Create a couple login. Bank and counselor accounts come from seed only."""
     form = await _form(request)
     email = str(form.get("email", "")).strip().lower()
     password = str(form.get("password", ""))
-    role = str(form.get("role", ""))
-    display_name = str(form.get("display_name", "")).strip()[:120]
+    role = str(form.get("role", "couple"))
     error = ""
-    if role not in ROLES:
-        error = "Choose couple, sperm bank, or genetic counselor."
+    if role != "couple":
+        error = (
+            "Public signup is for couples only. Use the demo bank or counselor login."
+        )
     elif "@" not in email or len(email) > 255:
         error = "Enter an email address."
     elif len(password) < 8:
@@ -393,21 +394,12 @@ async def register_submit(request: Request):
     elif _db(request).scalars(select(User).where(User.email == email)).first():
         error = "That email is already registered."
     if error:
-        shown_role = role if role in ROLES else "couple"
         return _render(
-            request, "login.html", None, status_code=400, role=shown_role, error=error
+            request, "login.html", None, status_code=400, role="couple", error=error
         )
     db = _db(request)
-    user = User(email=email, password_hash=hash_password(password), role=role)
+    user = User(email=email, password_hash=hash_password(password), role="couple")
     db.add(user)
-    db.flush()
-    if role == "counselor":
-        db.add(
-            CounselorProfile(
-                user_id=user.id,
-                display_name=display_name or email.split("@", 1)[0],
-            )
-        )
     db.commit()
     db.refresh(user)
     request.session["user_id"] = user.id
@@ -832,6 +824,7 @@ def _donor_page(
         who_progressive_min=WHO_PROGRESSIVE_MOTILITY_MIN_PCT,
         who_total_min=WHO_TOTAL_MOTILITY_MIN_PCT,
         motility_disclaimer=MOTILITY_DISCLAIMER,
+        motility_uploads_enabled=request.app.state.settings.motility_uploads_enabled,
     )
 
 
@@ -974,15 +967,25 @@ async def donor_motility_upload(request: Request, donor_id: int):
         return _redirect(needed.path)
     db = _db(request)
     donor = _owned_donor(db, user.id, donor_id)
+    settings = request.app.state.settings
+    if not settings.motility_uploads_enabled:
+        return _donor_page(
+            request,
+            user,
+            donor,
+            error=(
+                "Motility upload is disabled on this host. Run the app and "
+                "motility service locally (or on a long-lived server)."
+            ),
+            status_code=503,
+        )
     video = form.get("video")
     if video is None or not getattr(video, "filename", ""):
         return _donor_page(
             request, user, donor, error="Choose a video file.", status_code=400
         )
     video_bytes = await video.read()
-    result = analyze_donor_video(
-        video_bytes, video.filename, request.app.state.settings
-    )
+    result = analyze_donor_video(video_bytes, video.filename, settings)
     if result is None:
         return _donor_page(
             request,
@@ -993,7 +996,11 @@ async def donor_motility_upload(request: Request, donor_id: int):
         )
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
-    donor.motility_video_url = result["annotated_video_url"]
+    video_url = str(result.get("annotated_video_url") or "")
+    # * Service returns a path on its own host; store an absolute URL for playback.
+    if video_url.startswith("/"):
+        video_url = f"{settings.motility_service_url}{video_url}"
+    donor.motility_video_url = video_url
     donor.motility_below_reference = (
         donor.motility_total_pct < WHO_TOTAL_MOTILITY_MIN_PCT
         or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
@@ -1008,7 +1015,7 @@ async def donor_motility_upload(request: Request, donor_id: int):
 
 @router.post("/bank/donors/{donor_id}/delete")
 async def donor_delete(request: Request, donor_id: int):
-    """Delete a donor and that donor's carrier rows."""
+    """Delete a donor and dependent shortlist, visit, and carrier rows."""
     await _form(request)
     try:
         user = _require_consent(request, "bank")
@@ -1016,9 +1023,7 @@ async def donor_delete(request: Request, donor_id: int):
         return _redirect(needed.path)
     db = _db(request)
     donor = _owned_donor(db, user.id, donor_id)
-    for row in list_carriers(db, "donor", donor.id):
-        db.delete(row)
-    db.delete(donor)
+    delete_donor(db, donor)
     db.commit()
     _flash(request, "Donor removed.")
     return _redirect("/bank")

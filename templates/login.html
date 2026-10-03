@@ -14,18 +14,11 @@
   Demo bank: {{ demo_bank_email }} / {{ demo_bank_password }}<br />
   Demo counselor: {{ demo_counselor_email }} / {{ demo_counselor_password }}
 </p>
-<h2>Create an account</h2>
+<p class="hint">Bank and counselor accounts are seeded for the walkthrough. Public signup is for couples only.</p>
+<h2>Create a couple account</h2>
 <form method="post" action="/register" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
-  <fieldset>
-    <legend>Account type</legend>
-    <label><input type="radio" name="role" value="couple" {% if role == "couple" %}checked{% endif %} /> Couple</label>
-    <label><input type="radio" name="role" value="bank" {% if role == "bank" %}checked{% endif %} /> Sperm bank</label>
-    <label><input type="radio" name="role" value="counselor" {% if role == "counselor" %}checked{% endif %} /> Genetic counselor</label>
-  </fieldset>
-  <label>Display name (counselor)
-    <input name="display_name" maxlength="120" placeholder="Shown on the book page" />
-  </label>
+  <input type="hidden" name="role" value="couple" />
   <label>Email <input name="email" type="email" autocomplete="username" required /></label>
   <label>Password <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
   <button type="submit">Create account</button>

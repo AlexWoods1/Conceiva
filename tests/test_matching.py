@@ -171,3 +171,74 @@ def test_motility_below_reference_penalizes_without_a_hard_stop():
     assert any(
         reason.field == "donor.motility_below_reference" for reason in flagged.reasons
     )
+
+
+def test_id_release_either_never_penalizes():
+    couple_either = score_match(
+        _couple(),
+        _prefs(id_release="either"),
+        _donor(id_release_policy="anonymous"),
+    )
+    donor_either = score_match(
+        _couple(),
+        _prefs(id_release="open"),
+        _donor(id_release_policy="either"),
+    )
+
+    assert couple_either.score == 100
+    assert all(reason.kind != "survey" for reason in couple_either.reasons)
+    assert donor_either.score == 100
+    assert all(
+        reason.field != "donor.id_release_policy" for reason in donor_either.reasons
+    )
+
+
+def test_rh_flag_only_when_couple_negative_donor_positive():
+    reverse = score_match(_couple(rh="positive"), _prefs(), _donor(rh="negative"))
+    both_negative = score_match(_couple(rh="negative"), _prefs(), _donor(rh="negative"))
+
+    assert reverse.score == 100
+    assert all(reason.kind != "rh_flag" for reason in reverse.reasons)
+    assert both_negative.score == 100
+    assert all(reason.kind != "rh_flag" for reason in both_negative.reasons)
+
+
+def test_blood_reason_skipped_when_blood_type_blank():
+    couple_blank = score_match(_couple(blood_type=""), _prefs(), _donor())
+    donor_blank = score_match(_couple(), _prefs(), _donor(blood_type=""))
+
+    assert all(reason.kind != "blood" for reason in couple_blank.reasons)
+    assert all(reason.kind != "blood" for reason in donor_blank.reasons)
+
+
+def test_multiple_shared_genes_all_cited_and_score_zero():
+    result = score_match(
+        _couple(
+            genes=confirmed_genes([("cftr", "heterozygous"), ("hbb", "homozygous")])
+        ),
+        _prefs(id_release="open"),
+        _donor(
+            genes=confirmed_genes([("CFTR", "heterozygous"), ("HBB", "heterozygous")]),
+            id_release_policy="anonymous",
+            motility_below_reference=True,
+        ),
+    )
+    hard_stops = [reason for reason in result.reasons if reason.kind == "hard_stop"]
+
+    assert result.hard_stop is True
+    assert result.score == 0
+    assert {reason.value for reason in hard_stops} == {"CFTR", "HBB"}
+
+
+def test_ancestry_tokens_split_on_semicolon_and_pipe():
+    assert ancestry_overlaps("Finnish; Korean", "korean|Irish") is True
+
+    overlapped = score_match(
+        _couple(ancestry="Finnish; Korean"),
+        _prefs(),
+        _donor(ancestry="korean|Irish"),
+    )
+    separate = score_match(_couple(), _prefs(), _donor())
+
+    assert overlapped.score == separate.score == 100
+    assert any(reason.kind == "ancestry_context" for reason in overlapped.reasons)

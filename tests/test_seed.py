@@ -2,12 +2,13 @@
 
 from sqlalchemy import select
 
-from app.models import Carrier, Donor, User
+from app.models import AvailabilitySlot, Carrier, CounselorProfile, Donor, User
 from app.security import verify_password
 from app.seed import (
     DEMO_BANK_EMAIL,
     DEMO_BANK_PASSWORD,
     DEMO_COUNSELOR_EMAIL,
+    DEMO_COUNSELOR_NAME,
     DEMO_COUNSELOR_PASSWORD,
     DEMO_COUPLE_EMAIL,
     DEMO_COUPLE_PASSWORD,
@@ -47,3 +48,39 @@ def test_seed_demo_inserts_logins_donors_and_carrier_rows(db):
         ("CFTR", donors[1].id),
         ("HBB", donors[3].id),
     }
+
+
+def test_seed_demo_marks_couple_paid_and_creates_future_slots(db):
+    seed_demo(db)
+    db.commit()
+
+    couple = db.scalars(select(User).where(User.email == DEMO_COUPLE_EMAIL)).one()
+    counselor = db.scalars(select(User).where(User.email == DEMO_COUNSELOR_EMAIL)).one()
+    profile = db.get(CounselorProfile, counselor.id)
+    slots = list(
+        db.scalars(
+            select(AvailabilitySlot).where(
+                AvailabilitySlot.counselor_user_id == counselor.id
+            )
+        )
+    )
+    donor_630 = db.scalars(select(Donor).where(Donor.code == "DN-630")).one()
+
+    assert couple.paid_at is not None
+    assert profile is not None
+    assert profile.display_name == DEMO_COUNSELOR_NAME
+    assert len(slots) >= 3
+    assert donor_630.panel == ""
+    assert donor_630.cmv == "unknown"
+
+
+def test_seed_demo_is_idempotent(db):
+    seed_demo(db)
+    db.commit()
+    seed_demo(db)
+    db.commit()
+
+    users = list(db.scalars(select(User)))
+    donors = list(db.scalars(select(Donor)))
+    assert len(users) == 3
+    assert len(donors) == 6

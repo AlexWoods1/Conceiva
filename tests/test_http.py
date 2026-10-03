@@ -1,11 +1,13 @@
 """HTTP tests for accounts, surveys, matches, and the bank catalog."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 
-from app.models import Carrier, CoupleProfile, Donor, LlmLog, User
+from app.models import Carrier, CoupleProfile, CounselorProfile, Donor, LlmLog, User
+from app.security import hash_password
 from tests.conftest import TEST_PASSWORD
 
 CATALOG = Path(__file__).parent / "fixtures" / "catalog.html"
@@ -24,7 +26,36 @@ def _register(api, email: str, role: str = "couple", password: str = TEST_PASSWO
     return api.post("/register", {"email": email, "password": password, "role": role})
 
 
+def _provision_privileged(
+    api, email: str, role: str, password: str = TEST_PASSWORD, consent: bool = True
+):
+    """Insert a bank or counselor account (public register is couple-only)."""
+    db = api.session()
+    try:
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            role=role,
+            consent_at=datetime.now(timezone.utc) if consent else None,
+        )
+        db.add(user)
+        db.flush()
+        if role == "counselor":
+            db.add(
+                CounselorProfile(user_id=user.id, display_name=email.split("@", 1)[0])
+            )
+        db.commit()
+    finally:
+        db.close()
+    api.get("/login")
+    signed = api.post("/login", {"email": email, "password": password})
+    assert signed.status_code == 303
+    return signed
+
+
 def _consent(api, email: str, role: str = "couple"):
+    if role != "couple":
+        return _provision_privileged(api, email, role, consent=True)
     response = _register(api, email, role)
     assert response.status_code == 303
     assert response.headers["location"] == "/consent"
@@ -38,8 +69,16 @@ def test_register_rejects_bad_input_and_stores_a_normalized_email(api):
     too_long = ("a" * 251) + "@b.co"
     cases = [
         (
+            {"email": "a@b.co", "password": TEST_PASSWORD, "role": "bank"},
+            "Public signup is for couples only",
+        ),
+        (
+            {"email": "a@b.co", "password": TEST_PASSWORD, "role": "counselor"},
+            "Public signup is for couples only",
+        ),
+        (
             {"email": "a@b.co", "password": TEST_PASSWORD, "role": "admin"},
-            "Choose couple",
+            "Public signup is for couples only",
         ),
         (
             {"email": "not-an-email", "password": TEST_PASSWORD, "role": "couple"},
@@ -49,23 +88,26 @@ def test_register_rejects_bad_input_and_stores_a_normalized_email(api):
             {"email": too_long, "password": TEST_PASSWORD, "role": "couple"},
             "Enter an email",
         ),
-        ({"email": "a@b.co", "password": "short", "role": "couple"}, "at least 8"),
+        (
+            {"email": "a@b.co", "password": "short", "role": "couple"},
+            "at least 8 characters",
+        ),
     ]
-    for form, message in cases:
+    for form, needle in cases:
         response = api.post("/register", form)
         assert response.status_code == 400
-        assert message in response.json()["error"]
+        assert needle in response.json()["error"]
 
     created = api.post(
         "/register",
         {"email": "Person@Example.com", "password": TEST_PASSWORD, "role": "couple"},
     )
     assert created.status_code == 303
-    assert _user(api, "person@example.com").role == "couple"
+    assert _user(api, "person@example.com").email == "person@example.com"
 
     duplicate = api.post(
         "/register",
-        {"email": "person@example.com", "password": TEST_PASSWORD, "role": "bank"},
+        {"email": "person@example.com", "password": TEST_PASSWORD, "role": "couple"},
     )
     assert duplicate.status_code == 400
     assert "already registered" in duplicate.json()["error"]
@@ -126,7 +168,7 @@ def test_role_and_consent_guards(api):
     assert "Consent is required" in declined.json()["error"]
 
     api.post("/logout")
-    _register(api, "bank@example.com", role="bank")
+    _provision_privileged(api, "bank@example.com", role="bank", consent=False)
     assert api.get("/couple/history").headers["location"] == "/bank"
     assert api.get("/bank").headers["location"] == "/consent"
 

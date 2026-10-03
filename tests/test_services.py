@@ -1,31 +1,54 @@
 """Tests for account, survey, and match persistence."""
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import func, select
 
 from app.config import Settings
+from app.constants import APPOINTMENT_BOOKED, APPOINTMENT_CANCELLED, MOTILITY_PENALTY
 from app.llm import CitedSentence
 from app.matching import confirmed_genes
 from app.models import (
+    Appointment,
+    AvailabilitySlot,
+    CandidateReport,
     Carrier,
     CoupleProfile,
     CoupleSurvey,
     Donor,
     LlmLog,
     PriorHistory,
+    ShortlistItem,
     User,
 )
 from app.phenotype import resemblance_score
 from app.security import hash_password
 from app.services import (
+    add_to_shortlist,
+    appointment_donor_ids,
+    book_appointment,
+    cancel_appointment,
+    counselor_display_name,
     delete_account,
+    delete_donor,
     find_ranked_donor,
+    get_or_create_counselor_profile,
     get_or_create_history,
     get_or_create_profile,
     get_or_create_survey,
+    home_path_for,
+    latest_candidate_report,
     latest_explanation,
     list_carriers,
+    list_shortlist,
+    open_future_slots,
     packet_for,
     ranked_matches,
+    score_donor_for_couple,
+    sentences_from_json,
+    sentences_to_json,
+    slot_is_open,
+    store_candidate_report,
     store_explanation,
 )
 
@@ -236,6 +259,34 @@ def test_explanations_return_the_newest_log(db):
     assert latest_explanation(db, couple.id, donor.id)[0].text == "Second."
 
 
+def test_delete_donor_clears_shortlist_and_carrier_rows(db):
+    couple = _user(db, "couple@example.com")
+    bank = _user(db, "bank@example.com", role="bank")
+    donor = _donor(db, bank.id, "DN-1")
+    other = _donor(db, bank.id, "DN-2")
+    db.add(
+        Carrier(
+            subject_type="donor",
+            subject_id=donor.id,
+            gene="CFTR",
+            zygosity="heterozygous",
+        )
+    )
+    db.commit()
+    assert add_to_shortlist(db, couple.id, donor.id) is None
+    assert add_to_shortlist(db, couple.id, other.id) is None
+    db.commit()
+
+    delete_donor(db, donor)
+    db.commit()
+
+    assert db.get(Donor, donor.id) is None
+    assert db.get(Donor, other.id) is not None
+    assert list_shortlist(db, couple.id)[0].donor_id == other.id
+    assert list_carriers(db, "donor", donor.id) == []
+    assert db.scalar(select(func.count()).select_from(ShortlistItem)) == 1
+
+
 def test_delete_account_removes_only_that_accounts_records(db):
     couple = _user(db, "couple@example.com")
     other = _user(db, "other@example.com")
@@ -299,3 +350,223 @@ def test_delete_account_removes_only_that_accounts_records(db):
     assert db.get(Donor, donor_id) is None
     assert list_carriers(db, "donor", donor_id) == []
     assert db.scalar(select(func.count()).select_from(LlmLog)) == 0
+
+
+def test_home_path_for_roles():
+    assert home_path_for(User(email="a", password_hash="x", role="bank")) == "/bank"
+    assert (
+        home_path_for(User(email="b", password_hash="x", role="counselor"))
+        == "/counselor"
+    )
+    assert (
+        home_path_for(User(email="c", password_hash="x", role="couple"))
+        == "/couple/history"
+    )
+
+
+def test_sentences_json_round_trip():
+    original = [
+        CitedSentence("Panel listed.", "donor.panel", "ACMG-SF", "record"),
+        CitedSentence("Hard stop.", "carriers.gene", "CFTR", "hard_stop"),
+    ]
+
+    restored = sentences_from_json(sentences_to_json(original))
+
+    assert [(item.text, item.field, item.value, item.kind) for item in restored] == [
+        (item.text, item.field, item.value, item.kind) for item in original
+    ]
+
+
+def test_add_to_shortlist_rules(db, monkeypatch):
+    couple = _user(db, "couple@example.com")
+    bank = _user(db, "bank@example.com", role="bank")
+    draft = _donor(db, bank.id, "DRAFT", catalog_confirmed=False)
+    first = _donor(db, bank.id, "DN-1")
+    second = _donor(db, bank.id, "DN-2")
+
+    assert add_to_shortlist(db, couple.id, draft.id) == (
+        "That donor is not on the confirmed inventory."
+    )
+    assert add_to_shortlist(db, couple.id, first.id) is None
+    db.commit()
+    assert add_to_shortlist(db, couple.id, first.id) is None
+    assert len(list_shortlist(db, couple.id)) == 1
+
+    monkeypatch.setattr("app.services.MAX_SHORTLIST", 1)
+    assert "limited to" in add_to_shortlist(db, couple.id, second.id)
+
+
+def test_slot_is_open_and_open_future_slots_respect_clock(db):
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    couple = _user(db, "couple@example.com")
+    now = datetime(2030, 1, 15, 12, 0, tzinfo=timezone.utc)
+    past = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now - timedelta(hours=1),
+        duration_minutes=45,
+    )
+    future = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(hours=2),
+        duration_minutes=45,
+    )
+    db.add_all([past, future])
+    db.flush()
+    db.add(
+        Appointment(
+            couple_user_id=couple.id,
+            counselor_user_id=counselor.id,
+            slot_id=future.id,
+            status=APPOINTMENT_BOOKED,
+            created_at=now,
+        )
+    )
+    db.commit()
+
+    assert slot_is_open(db, past, now=now) is False
+    assert slot_is_open(db, future, now=now) is False
+    assert open_future_slots(db, now=now) == []
+
+    cancel_appointment(db, db.scalars(select(Appointment)).one())
+    db.commit()
+    assert slot_is_open(db, future, now=now) is True
+    assert [slot.id for slot in open_future_slots(db, now=now)] == [future.id]
+
+
+def test_book_and_cancel_appointment(db):
+    couple = _user(db, "couple@example.com")
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    bank = _user(db, "bank@example.com", role="bank")
+    donor = _donor(db, bank.id, "DN-1")
+    now = datetime(2030, 2, 1, 10, 0, tzinfo=timezone.utc)
+    slot = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(days=1),
+        duration_minutes=45,
+    )
+    db.add(slot)
+    db.commit()
+
+    empty = book_appointment(db, couple, slot, now=now)
+    assert isinstance(empty, str)
+    assert "shortlist" in empty
+
+    assert add_to_shortlist(db, couple.id, donor.id) is None
+    db.commit()
+    appointment = book_appointment(db, couple, slot, now=now)
+    db.commit()
+    assert isinstance(appointment, Appointment)
+    assert appointment.status == APPOINTMENT_BOOKED
+    assert appointment_donor_ids(db, appointment.id) == [donor.id]
+
+    assert cancel_appointment(db, appointment) is None
+    db.commit()
+    assert appointment.status == APPOINTMENT_CANCELLED
+    assert cancel_appointment(db, appointment) == "That visit is already cancelled."
+
+
+def test_store_and_latest_candidate_report_upserts(db):
+    couple = _user(db, "couple@example.com")
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    bank = _user(db, "bank@example.com", role="bank")
+    donor = _donor(db, bank.id, "DN-1")
+    now = datetime(2030, 3, 1, tzinfo=timezone.utc)
+    slot = AvailabilitySlot(
+        counselor_user_id=counselor.id, starts_at=now, duration_minutes=45
+    )
+    db.add(slot)
+    db.flush()
+    appointment = Appointment(
+        couple_user_id=couple.id,
+        counselor_user_id=counselor.id,
+        slot_id=slot.id,
+        status=APPOINTMENT_BOOKED,
+        created_at=now,
+    )
+    db.add(appointment)
+    db.commit()
+
+    store_candidate_report(
+        db,
+        appointment.id,
+        donor.id,
+        [CitedSentence("First.", "donor.panel", "ACMG-SF", "record")],
+    )
+    store_candidate_report(
+        db,
+        appointment.id,
+        donor.id,
+        [CitedSentence("Second.", "donor.panel", "ACMG-SF", "record")],
+    )
+    db.commit()
+
+    rows = list(db.scalars(select(CandidateReport)))
+    assert len(rows) == 1
+    assert latest_candidate_report(db, appointment.id, donor.id)[0].text == "Second."
+
+
+def test_counselor_display_name_falls_back_to_email(db):
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    assert counselor_display_name(db, counselor) == "counselor@example.com"
+
+    profile = get_or_create_counselor_profile(db, counselor.id)
+    profile.display_name = "Ada Counselor"
+    db.commit()
+    assert counselor_display_name(db, counselor) == "Ada Counselor"
+
+
+def test_delete_account_counselor_removes_slots_and_visits(db):
+    couple = _user(db, "couple@example.com")
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    bank = _user(db, "bank@example.com", role="bank")
+    donor = _donor(db, bank.id, "DN-1")
+    get_or_create_counselor_profile(db, counselor.id)
+    now = datetime(2030, 4, 1, tzinfo=timezone.utc)
+    slot = AvailabilitySlot(
+        counselor_user_id=counselor.id, starts_at=now, duration_minutes=45
+    )
+    db.add(slot)
+    db.flush()
+    appointment = Appointment(
+        couple_user_id=couple.id,
+        counselor_user_id=counselor.id,
+        slot_id=slot.id,
+        status=APPOINTMENT_BOOKED,
+        created_at=now,
+    )
+    db.add(appointment)
+    db.flush()
+    store_candidate_report(
+        db,
+        appointment.id,
+        donor.id,
+        [CitedSentence("Note.", "donor.panel", "ACMG-SF", "record")],
+    )
+    db.commit()
+    counselor_id = counselor.id
+    slot_id = slot.id
+    appointment_id = appointment.id
+
+    delete_account(db, counselor)
+    db.commit()
+
+    assert db.get(User, counselor_id) is None
+    assert db.get(AvailabilitySlot, slot_id) is None
+    assert db.get(Appointment, appointment_id) is None
+    assert db.scalar(select(func.count()).select_from(CandidateReport)) == 0
+    assert db.get(User, couple.id) is not None
+
+
+def test_score_donor_for_couple_passes_motility_flag(db):
+    couple = _user(db, "couple@example.com")
+    bank = _user(db, "bank@example.com", role="bank")
+    donor = _donor(db, bank.id, "DN-1", motility_below_reference=True)
+    _ready_survey(db, couple.id)
+
+    result = score_donor_for_couple(db, couple, donor, _settings())
+
+    assert result.score == 100 - MOTILITY_PENALTY
+    assert result.hard_stop is False
+    assert any(
+        reason.field == "donor.motility_below_reference" for reason in result.reasons
+    )
