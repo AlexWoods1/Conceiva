@@ -65,14 +65,29 @@
 <h2>Motility test</h2>
 <p class="hint">{{ motility_disclaimer }}</p>
 {% if donor.motility_total_pct is not none %}
-<p>
-  Total motility: {{ "%.1f"|format(donor.motility_total_pct) }}%
-  (WHO lower reference: {{ who_total_min }}%) &middot;
-  Progressive: {{ "%.1f"|format(donor.motility_progressive_pct) }}%
-  (WHO lower reference: {{ who_progressive_min }}%)
+{% if donor.motility_below_reference %}
+<p class="motility-flag">
+  Below WHO lower reference limits. This donor carries a ranking penalty and
+  the reason is shown to couples on the match page.
 </p>
+{% endif %}
+<ul class="motility-readout">
+  <li{% if donor.motility_total_pct < who_total_min %} class="below"{% endif %}>
+    Total motility <strong>{{ "%.1f"|format(donor.motility_total_pct) }}%</strong>
+    <span class="hint">WHO lower reference {{ who_total_min }}%</span>
+  </li>
+  <li{% if donor.motility_progressive_pct < who_progressive_min %} class="below"{% endif %}>
+    Progressive <strong>{{ "%.1f"|format(donor.motility_progressive_pct) }}%</strong>
+    <span class="hint">WHO lower reference {{ who_progressive_min }}%</span>
+  </li>
+</ul>
 {% if donor.motility_video_url %}
 <video src="{{ donor.motility_video_url }}" controls width="480"></video>
+<p class="hint">
+  Each tracked sperm is drawn in its motility category: green progressive,
+  yellow non-progressive, red immotile. Colors update as a track accumulates,
+  so they settle a moment after a sperm first appears.
+</p>
 {% endif %}
 {% endif %}
 <form method="post" action="/bank/donors/{{ donor.id }}/motility" enctype="multipart/form-data" class="stack">

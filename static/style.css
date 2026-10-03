@@ -831,3 +831,37 @@ button.button-ghost-form:hover,
     transform: none;
   }
 }
+
+/* Motility readout on the bank donor page. */
+.motility-flag {
+  background: var(--stop-bg);
+  color: var(--stop);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-weight: 600;
+}
+
+.motility-readout {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.motility-readout li {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  min-width: 13rem;
+}
+
+.motility-readout li.below {
+  border-color: var(--stop);
+  color: var(--stop);
+}
+
+.motility-readout strong { font-size: 1.25rem; display: block; }
+.motility-readout .hint { display: block; font-size: 0.85rem; }

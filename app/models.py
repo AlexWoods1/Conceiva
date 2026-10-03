@@ -103,6 +103,7 @@ class Donor(Base):
     motility_total_pct: Mapped[float | None] = mapped_column(Float, default=None)
     motility_progressive_pct: Mapped[float | None] = mapped_column(Float, default=None)
     motility_video_url: Mapped[str] = mapped_column(String(255), default="")
+    motility_below_reference: Mapped[bool] = mapped_column(default=False)
 
 
 class Carrier(Base):
