@@ -55,6 +55,15 @@ QUARANTINE_LABELS = {
     "in_quarantine": "Still in quarantine",
 }
 
+# * Physical traits a bank records. Shown and filterable, never part of the rank.
+HAIR_COLORS = ("black", "brown", "blond", "red", "gray")
+HAIR_TYPES = ("straight", "wavy", "curly", "coily")
+EYE_COLORS = ("brown", "hazel", "green", "blue", "gray")
+HEIGHT_CM_MIN = 140
+HEIGHT_CM_MAX = 220
+WEIGHT_KG_MIN = 40
+WEIGHT_KG_MAX = 160
+
 # * Soft penalties. A shared recessive carrier is a hard stop, not a penalty.
 FAMILY_LIMIT_PENALTY = 20
 ID_RELEASE_PENALTY = 15

@@ -48,6 +48,47 @@
       {% endfor %}
     </select>
   </label>
+  <fieldset>
+    <legend>Physical traits</legend>
+    <p class="help">Optional. Couples see these on the match page and can filter by them. They do not change the medical rank.</p>
+    <label>Hair color
+      <select name="hair_color">
+        <option value="" {% if not donor.hair_color %}selected{% endif %}>Not recorded</option>
+        {% for item in hair_colors %}
+        <option value="{{ item }}" {% if donor.hair_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Hair type
+      <select name="hair_type">
+        <option value="" {% if not donor.hair_type %}selected{% endif %}>Not recorded</option>
+        {% for item in hair_types %}
+        <option value="{{ item }}" {% if donor.hair_type == item %}selected{% endif %}>{{ item|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Eye color
+      <select name="eye_color">
+        <option value="" {% if not donor.eye_color %}selected{% endif %}>Not recorded</option>
+        {% for item in eye_colors %}
+        <option value="{{ item }}" {% if donor.eye_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Height (cm)
+      <input name="height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ donor.height_cm or '' }}" />
+    </label>
+    <label>Weight (kg)
+      <input name="weight_kg" type="number" min="{{ weight_min }}" max="{{ weight_max }}" value="{{ donor.weight_kg or '' }}" />
+    </label>
+    {% if donor.bmi is not none %}
+    <p class="help">BMI {{ donor.bmi }}, calculated from height and weight.</p>
+    {% endif %}
+    <label>Ethnicity (as the donor reports it)
+      <input name="ethnicity" value="{{ donor.ethnicity }}" maxlength="64" />
+    </label>
+    <p class="help">Shown on the donor profile only. There is no ethnicity filter and it does not change the rank.</p>
+  </fieldset>
   <label>Synthetic portrait
     <select name="photo_key">
       {% for item in photo_keys %}

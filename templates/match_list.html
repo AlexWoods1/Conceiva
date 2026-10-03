@@ -10,8 +10,50 @@
 </p>
 {% if not survey.preferences_done %}
 <p>Save both survey steps to see a ranked list.</p>
-{% elif not rows %}
-<p>No confirmed donors are on file.</p>
+{% else %}
+<form method="get" action="/match" class="trait-filters">
+  <p class="help">Filter by physical traits. Filters only hide donors; they never change the medical rank. A donor with a trait not recorded is hidden by that filter.</p>
+  <label>Hair color
+    <select name="hair_color">
+      <option value="">Any</option>
+      {% for item in hair_colors %}
+      <option value="{{ item }}" {% if trait_filter.hair_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Hair type
+    <select name="hair_type">
+      <option value="">Any</option>
+      {% for item in hair_types %}
+      <option value="{{ item }}" {% if trait_filter.hair_type == item %}selected{% endif %}>{{ item|capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Eye color
+    <select name="eye_color">
+      <option value="">Any</option>
+      {% for item in eye_colors %}
+      <option value="{{ item }}" {% if trait_filter.eye_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Min height (cm)
+    <input name="min_height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ trait_filter.min_height_cm if trait_filter.min_height_cm is not none else '' }}" />
+  </label>
+  <label>Max height (cm)
+    <input name="max_height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ trait_filter.max_height_cm if trait_filter.max_height_cm is not none else '' }}" />
+  </label>
+  <label>Max BMI
+    <input name="max_bmi" type="number" min="10" max="60" step="0.1" value="{{ trait_filter.max_bmi if trait_filter.max_bmi is not none else '' }}" />
+  </label>
+  <button type="submit">Apply filters</button>
+  {% if trait_filter.active %}<a href="/match">Clear filters</a>{% endif %}
+</form>
+{% if trait_filter.active and hidden_count %}
+<p class="help">{{ hidden_count }} donor{{ "s" if hidden_count != 1 }} hidden by your filters.</p>
+{% endif %}
+{% if not rows %}
+<p>{% if trait_filter.active %}No donors match these filters.{% else %}No confirmed donors are on file.{% endif %}</p>
 {% else %}
 <div class="rows">
   {% for donor, result in rows %}
@@ -35,6 +77,13 @@
         · family limit {{ donor.family_limit }}
         · {{ id_release_labels[donor.id_release_policy] }}
       </p>
+      {% set traits = trait_summary(donor) %}
+      {% if traits or donor.ethnicity %}
+      <p class="meta traits">
+        {{ traits|join(" · ") }}
+        {% if donor.ethnicity %}{% if traits %} · {% endif %}Ethnicity (donor-reported): {{ donor.ethnicity }}{% endif %}
+      </p>
+      {% endif %}
       {% if demo_blurbs.get(donor.code) %}
       <p class="help">{{ demo_blurbs[donor.code] }}</p>
       {% endif %}
@@ -66,5 +115,6 @@
   </article>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}
