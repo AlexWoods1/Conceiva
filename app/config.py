@@ -79,11 +79,9 @@ def load_settings() -> Settings:
             "SESSION_SECRET must be set to a non-default value on Vercel."
         )
     contact_email = os.environ.get("CONTACT_EMAIL", "privacy@example.com").strip()
-    if "MOTILITY_UPLOADS_ENABLED" in os.environ:
-        motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "false")
-    else:
-        # * Real analyze needs the long-lived motility backend (not Vercel).
-        motility_uploads_enabled = not on_vercel
+    # * Form stays on unless explicitly disabled. Analyze still needs a reachable
+    # * motility backend (local :8010 or a public MOTILITY_SERVICE_URL).
+    motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "true")
     return Settings(
         database_path=database_path,
         session_secret=session_secret,

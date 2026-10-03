@@ -71,7 +71,12 @@ def test_vercel_uses_temporary_storage_and_secure_cookies(monkeypatch):
     assert settings.database_path == Path("/tmp/donor-match.db")
     assert settings.secure_cookies is True
     assert settings.contact_email == "desk@example.com"
-    assert settings.motility_uploads_enabled is False
+    assert settings.motility_uploads_enabled is True
+
+
+def test_motility_uploads_can_be_disabled_explicitly(monkeypatch):
+    monkeypatch.setenv("MOTILITY_UPLOADS_ENABLED", "false")
+    assert load_settings().motility_uploads_enabled is False
 
 
 def test_vercel_rejects_default_session_secret(monkeypatch):

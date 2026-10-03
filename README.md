@@ -36,8 +36,8 @@ Set these in the Vercel project environment:
 | `SESSION_SECRET` | **Yes** | Non-default value. App refuses to start without it. |
 | `SEED_ON_EMPTY` | Optional | Default `true`. Demo accounts upsert if missing. |
 | `STRIPE_*` | Leave unset | Matches stay free for the demo. |
-| `MOTILITY_UPLOADS_ENABLED` | Leave unset | Defaults off on Vercel (ML backend is separate). |
-| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | Local / long-lived host only | Live analyze service. |
+| `MOTILITY_UPLOADS_ENABLED` | Optional | Default `true`. Set `false` to hide the bank upload form. |
+| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | For live analyze | Point at the motility backend (`backend/`). Local default `http://127.0.0.1:8010`. |
 
 SQLite on Vercel lives under `/tmp`. Data can reset when instances recycle. Demo logins are shared across judges.
 
