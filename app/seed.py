@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.constants import DEFAULT_SLOT_MINUTES
@@ -94,9 +95,16 @@ DEMO_TRAITS = {
 def seed_demo(db: Session) -> None:
     """Insert the demo bank, donors, couple, counselor, and open slots.
 
+    Idempotent: if the demo bank email already exists, this is a no-op so
+    shared /tmp databases are not wiped or duplicated on cold start.
+
     Args:
         db: Open session. The caller commits.
     """
+    existing = db.scalars(select(User).where(User.email == DEMO_BANK_EMAIL)).first()
+    if existing is not None:
+        return
+
     bank = User(
         email=DEMO_BANK_EMAIL,
         password_hash=hash_password(DEMO_BANK_PASSWORD),

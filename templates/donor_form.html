@@ -131,11 +131,22 @@
 </p>
 {% endif %}
 {% endif %}
+{% if motility_uploads_enabled %}
 <form method="post" action="/bank/donors/{{ donor.id }}/motility" enctype="multipart/form-data" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <label>Upload sample video <input type="file" name="video" accept="video/*" required /></label>
   <button type="submit">Analyze motility</button>
+  <p class="hint">
+    Takes 1-2 minutes on CPU. The page will stay on this screen until it's
+    done -- please don't close the tab or submit again.
+  </p>
 </form>
+{% else %}
+<p class="hint">
+  Motility upload is off on this host (for example Vercel). Run the app with a
+  local motility service to analyze sample videos.
+</p>
+{% endif %}
 <form method="post" action="/bank/donors/{{ donor.id }}/delete">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <button type="submit" class="danger">Delete donor</button>

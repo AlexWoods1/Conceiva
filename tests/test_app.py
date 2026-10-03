@@ -53,12 +53,31 @@ def test_empty_database_is_seeded_once(make_app, tmp_path):
         db.close()
 
 
-def test_existing_database_file_is_not_seeded(make_app, tmp_path):
+def test_existing_empty_database_gets_idempotent_seed(make_app, tmp_path):
     path = tmp_path / "existing.db"
     path.touch()
     app = make_app(database_path=path, seed_on_empty=True)
 
-    assert _users(app) == []
+    assert [user.email for user in _users(app)] == [
+        "bank@demo.local",
+        "counselor@demo.local",
+        "couple@demo.local",
+    ]
+
+
+def test_seed_is_idempotent_when_demos_already_exist(make_app, tmp_path):
+    from app.seed import seed_demo
+
+    path = tmp_path / "twice.db"
+    app = make_app(database_path=path, seed_on_empty=True)
+    assert len(_users(app)) == 3
+    session = app.state.session_factory()
+    try:
+        seed_demo(session)
+        session.commit()
+    finally:
+        session.close()
+    assert len(_users(app)) == 3
 
 
 def test_appointments_slot_unique_is_dropped_on_startup(tmp_path):

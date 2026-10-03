@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -21,32 +21,43 @@ from app.seed import seed_demo
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # * SQLite create_all does not add columns to existing tables.
-_DONOR_COLUMN_DDL = (
-    ("motility_total_pct", "FLOAT"),
-    ("motility_progressive_pct", "FLOAT"),
-    ("motility_video_url", "VARCHAR(255) DEFAULT ''"),
-    ("motility_below_reference", "BOOLEAN NOT NULL DEFAULT 0"),
-    ("hair_color", "VARCHAR(16) NOT NULL DEFAULT ''"),
-    ("hair_type", "VARCHAR(16) NOT NULL DEFAULT ''"),
-    ("eye_color", "VARCHAR(16) NOT NULL DEFAULT ''"),
-    ("height_cm", "INTEGER"),
-    ("weight_kg", "INTEGER"),
-    ("ethnicity", "VARCHAR(64) NOT NULL DEFAULT ''"),
-)
+_SQLITE_COLUMN_DDL: dict[str, tuple[tuple[str, str], ...]] = {
+    "donors": (
+        ("motility_total_pct", "FLOAT"),
+        ("motility_progressive_pct", "FLOAT"),
+        ("motility_video_url", "VARCHAR(255) DEFAULT ''"),
+        ("motility_below_reference", "BOOLEAN DEFAULT 0"),
+        ("hair_color", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ("hair_type", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ("eye_color", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ("height_cm", "INTEGER"),
+        ("weight_kg", "INTEGER"),
+        ("ethnicity", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ),
+    "users": (
+        ("paid_at", "DATETIME"),
+        ("stripe_checkout_session_id", "VARCHAR(255)"),
+    ),
+}
 
 
 def _ensure_sqlite_columns(engine) -> None:
-    """Add missing donor columns after model changes on an existing SQLite file."""
+    """Add missing columns after model changes on an existing SQLite file."""
     with engine.begin() as conn:
-        existing = {
-            row[1]
-            for row in conn.exec_driver_sql("PRAGMA table_info(donors)").fetchall()
-        }
-        if not existing:
-            return
-        for name, sql_type in _DONOR_COLUMN_DDL:
-            if name not in existing:
-                conn.exec_driver_sql(f"ALTER TABLE donors ADD COLUMN {name} {sql_type}")
+        for table, columns in _SQLITE_COLUMN_DDL.items():
+            existing = {
+                row[1]
+                for row in conn.exec_driver_sql(
+                    f"PRAGMA table_info({table})"
+                ).fetchall()
+            }
+            if not existing:
+                continue
+            for name, sql_type in columns:
+                if name not in existing:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"
+                    )
 
 
 def _appointments_slot_id_is_unique(conn) -> bool:
@@ -148,16 +159,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     settings = settings or load_settings()
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
-    existed = settings.database_path.exists()
     engine = create_engine(
         f"sqlite:///{settings.database_path}",
         connect_args={"check_same_thread": False},
     )
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(engine)
     _ensure_sqlite_columns(engine)
     _ensure_appointments_slot_reusable(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    if settings.seed_on_empty and not existed:
+    # * Idempotent seed: fills missing demo accounts without wiping existing rows.
+    if settings.seed_on_empty:
         session = factory()
         try:
             seed_demo(session)
