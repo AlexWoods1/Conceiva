@@ -82,7 +82,7 @@ def load_settings() -> Settings:
     if "MOTILITY_UPLOADS_ENABLED" in os.environ:
         motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "false")
     else:
-        # * Vercel maxDuration cannot host the analyze round-trip.
+        # * Real analyze needs the long-lived motility backend (not Vercel).
         motility_uploads_enabled = not on_vercel
     return Settings(
         database_path=database_path,

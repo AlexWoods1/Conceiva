@@ -20,17 +20,21 @@ DEMO_COUNSELOR_PASSWORD = "demo-counselor"
 DEMO_COUNSELOR_NAME = "Demo Genetic Counselor"
 
 # * Shown on match cards so the seeded rank can be read without opening each row.
+# * Precomputed sample clips under static/ so Vercel can play them without the motility service.
+DEMO_MOTILITY_VIDEO_OK = "/static/motility/demo-tracked.mp4"
+DEMO_MOTILITY_VIDEO_LOW = "/static/motility/demo-low-tracked.mp4"
+
 DEMO_BLURBS = {
     "DN-100": (
         "Cleared, CMV negative, open ID, family limit 25, Rh negative, no shared carrier gene. "
-        "For the sample couple this is the clean candidate."
+        "Motility above WHO reference. For the sample couple this is the clean candidate."
     ),
     "DN-240": (
         "Heterozygous CFTR. If the couple also lists CFTR, this row is a hard stop and stays visible."
     ),
     "DN-310": (
-        "CMV positive and anonymous, family limit 5. Those are soft weights when the couple needs "
-        "CMV negative or open ID."
+        "CMV positive and anonymous, family limit 5, and motility below WHO reference. Soft weights "
+        "when the couple needs CMV negative or open ID; motility adds a ranking penalty."
     ),
     "DN-410": (
         "Still in quarantine, family limit 1, anonymous, heterozygous HBB. Quarantine and the "
@@ -92,17 +96,39 @@ DEMO_TRAITS = {
 }
 
 
+def _backfill_demo_motility(db: Session) -> None:
+    """Fill motility readouts on demo donors when an older DB is missing them."""
+    by_code = {
+        donor.code: donor for donor in db.scalars(select(Donor)).all() if donor.code
+    }
+    donor_100 = by_code.get("DN-100")
+    if donor_100 is not None and donor_100.motility_total_pct is None:
+        donor_100.motility_total_pct = 69.0
+        donor_100.motility_progressive_pct = 45.1
+        donor_100.motility_video_url = DEMO_MOTILITY_VIDEO_OK
+        donor_100.motility_below_reference = False
+    donor_310 = by_code.get("DN-310")
+    if donor_310 is not None and donor_310.motility_total_pct is None:
+        donor_310.motility_total_pct = 28.0
+        donor_310.motility_progressive_pct = 12.7
+        donor_310.motility_video_url = DEMO_MOTILITY_VIDEO_LOW
+        donor_310.motility_below_reference = True
+
+
 def seed_demo(db: Session) -> None:
     """Insert the demo bank, donors, couple, counselor, and open slots.
 
     Idempotent: if the demo bank email already exists, this is a no-op so
     shared /tmp databases are not wiped or duplicated on cold start.
+    Missing motility fields on seeded donors are backfilled so older DBs
+    still show the Motility test section on Vercel.
 
     Args:
         db: Open session. The caller commits.
     """
     existing = db.scalars(select(User).where(User.email == DEMO_BANK_EMAIL)).first()
     if existing is not None:
+        _backfill_demo_motility(db)
         return
 
     bank = User(
@@ -153,6 +179,11 @@ def seed_demo(db: Session) -> None:
             family_limit=25,
             id_release_policy="open",
             catalog_confirmed=True,
+            # * From samples/demo — above WHO total/progressive floors.
+            motility_total_pct=69.0,
+            motility_progressive_pct=45.1,
+            motility_video_url=DEMO_MOTILITY_VIDEO_OK,
+            motility_below_reference=False,
         ),
         Donor(
             bank_user_id=bank.id,
@@ -181,6 +212,11 @@ def seed_demo(db: Session) -> None:
             family_limit=5,
             id_release_policy="anonymous",
             catalog_confirmed=True,
+            # * From samples/demo_low_motility — flags ranking penalty.
+            motility_total_pct=28.0,
+            motility_progressive_pct=12.7,
+            motility_video_url=DEMO_MOTILITY_VIDEO_LOW,
+            motility_below_reference=True,
         ),
         Donor(
             bank_user_id=bank.id,

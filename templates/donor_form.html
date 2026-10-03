@@ -137,14 +137,15 @@
   <label>Upload sample video <input type="file" name="video" accept="video/*" required /></label>
   <button type="submit">Analyze motility</button>
   <p class="hint">
-    Takes 1-2 minutes on CPU. The page will stay on this screen until it's
-    done -- please don't close the tab or submit again.
+    Requires the motility backend on MOTILITY_SERVICE_URL (default
+    http://127.0.0.1:8010). Analysis takes 1-2 minutes on CPU — keep this
+    tab open until it finishes.
   </p>
 </form>
 {% else %}
 <p class="hint">
-  Motility upload is off on this host (for example Vercel). Run the app with a
-  local motility service to analyze sample videos.
+  Motility upload is off on this host. Run the app and motility backend
+  locally to analyze sample videos.
 </p>
 {% endif %}
 <form method="post" action="/bank/donors/{{ donor.id }}/delete">

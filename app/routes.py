@@ -63,7 +63,7 @@ from app.models import (
     Donor,
     User,
 )
-from app.motility_client import analyze_donor_video
+from app.motility_client import MotilityServiceError, analyze_donor_video
 from app.scrape import CatalogDonor, fetch_catalog_html, parse_catalog
 from app.security import hash_password, verify_password
 from app.seed import (
@@ -1055,17 +1055,12 @@ async def donor_motility_upload(request: Request, donor_id: int):
     # while the video is processed. Called directly, that freezes this
     # single-threaded event loop -- every other request, for every user,
     # stalls until it returns. run_in_threadpool moves it off the loop.
-    result = await run_in_threadpool(
-        analyze_donor_video, video_bytes, video.filename, settings
-    )
-    if result is None:
-        return _donor_page(
-            request,
-            user,
-            donor,
-            error="Motility analysis is unavailable right now.",
-            status_code=503,
+    try:
+        result = await run_in_threadpool(
+            analyze_donor_video, video_bytes, video.filename, settings
         )
+    except MotilityServiceError as exc:
+        return _donor_page(request, user, donor, error=exc.message, status_code=503)
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
     # * Service returns a path on its own host; store an absolute URL for playback.

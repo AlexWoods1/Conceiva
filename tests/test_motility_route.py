@@ -1,6 +1,11 @@
 """HTTP tests for the donor motility upload route."""
 
+from dataclasses import replace
+
+import pytest
+
 from app.models import Donor
+from app.motility_client import MotilityServiceError
 from tests.test_http import _consent
 
 
@@ -47,24 +52,11 @@ def test_motility_upload_stores_the_result(api, monkeypatch):
     )
     assert response.status_code == 303
 
-    db = api.session()
-    try:
-        donor = db.get(Donor, donor_id)
-        # The service returns a path relative to ITS OWN origin, not this
-        # app's -- a bare path stored verbatim 404s in the browser, since
-        # <video src> resolves against the page's origin. Caught live by
-        # running the app and the service on separate ports and actually
-        # loading the result: percentages saved fine, player was broken.
-        assert (
-            donor.motility_video_url == "http://localhost:8010/videos/abc/tracked.mp4"
-        )
-    finally:
-        db.close()
-
     page = api.get(f"/bank/donors/{donor_id}")
     body = page.json()
     assert body["motility_total_pct"] == 48.3
     assert body["motility_progressive_pct"] == 34.2
+
     db = api.session()
     try:
         donor = db.get(Donor, donor_id)
@@ -76,8 +68,6 @@ def test_motility_upload_stores_the_result(api, monkeypatch):
 
 
 def test_motility_upload_disabled_returns_clear_error(api, monkeypatch):
-    from dataclasses import replace
-
     api.app.state.settings = replace(
         api.app.state.settings, motility_uploads_enabled=False
     )
@@ -97,13 +87,14 @@ def test_motility_upload_disabled_returns_clear_error(api, monkeypatch):
     assert "disabled" in response.json()["error"].lower()
 
 
-def test_motility_upload_shows_an_error_when_the_service_is_down(api, monkeypatch):
+def test_motility_upload_shows_service_error(api, monkeypatch):
     _consent(api, "bank@example.com", role="bank")
     donor_id = _create_donor(api)
 
-    monkeypatch.setattr(
-        "app.routes.analyze_donor_video", lambda video_bytes, filename, settings: None
-    )
+    def _raise(*_args, **_kwargs):
+        raise MotilityServiceError("Motility service is unreachable.")
+
+    monkeypatch.setattr("app.routes.analyze_donor_video", _raise)
 
     response = api.client.post(
         f"/bank/donors/{donor_id}/motility",
@@ -111,7 +102,7 @@ def test_motility_upload_shows_an_error_when_the_service_is_down(api, monkeypatc
         files={"video": ("sample.mp4", b"fake video bytes", "video/mp4")},
     )
     assert response.status_code == 503
-    assert "unavailable" in response.json()["error"]
+    assert "unreachable" in response.json()["error"]
 
 
 def _upload(api, donor_id, monkeypatch, total, progressive):
