@@ -22,7 +22,8 @@ ID_RELEASE = ("open", "anonymous", "either")
 CMV_STATUS = ("negative", "positive", "unknown")
 CMV_REQUIREMENTS = ("any", "negative_required")
 QUARANTINE = ("cleared", "in_quarantine")
-PHOTO_KEYS = ("geo-1", "geo-2", "geo-3", "geo-4", "geo-5", "geo-6")
+# * default is the new-donor placeholder; geo-* remain optional DiceBear stand-ins.
+PHOTO_KEYS = ("default", "geo-1", "geo-2", "geo-3", "geo-4", "geo-5", "geo-6")
 ADULT_PHOTO_KEYS = ("adult-1", "adult-2")
 ROLES = ("couple", "bank")
 
