@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Visit session{% endblock %}
+{% block body %}
+<section class="visit-page">
+  <p class="match-back"><a href="/counselor">← Visits</a></p>
+
+  <header class="visit-header">
+    <div class="visit-header-copy">
+      <p class="match-kicker">Counseling session</p>
+      <h1>{{ couple_email }}</h1>
+      <p class="status-pill status-{{ appointment.status }}">{{ appointment.status }}</p>
+      {% if slot %}
+      <p class="visit-item-when">
+        {{ slot.starts_at.strftime("%a %d %b %Y") }}
+        · {{ slot.starts_at.strftime("%H:%M") }} UTC
+        · {{ slot.duration_minutes }} min
+      </p>
+      {% endif %}
+      {% if appointment.status == "booked" %}
+      <p class="help">
+        Candidates are the set the couple booked. Profiles are live from the database.
+        Run the AI tool for a cited report per candidate during the meeting.
+      </p>
+      {% else %}
+      <p class="help">This visit is cancelled. The slot is open for booking again. Existing reports stay below.</p>
+      {% endif %}
+    </div>
+    {% if appointment.status == "booked" %}
+    <div class="visit-actions">
+      <form method="post" action="/counselor/appointments/{{ appointment.id }}/report">
+        <input type="hidden" name="csrf" value="{{ csrf }}" />
+        <button type="submit">Generate all reports</button>
+      </form>
+      <form method="post" action="/counselor/appointments/{{ appointment.id }}/cancel">
+        <input type="hidden" name="csrf" value="{{ csrf }}" />
+        <button type="submit" class="button-ghost-form">Cancel visit</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+
+  <h2 class="visit-section-title">Candidates</h2>
+  {% if candidates %}
+  <div class="rows">
+    {% for item in candidates %}
+    <article class="donor-row visit-candidate">
+      <img class="portrait" src="/static/photos/{{ item.donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ item.donor.code }}" width="96" height="96" />
+      <div class="donor-copy">
+        <div class="visit-candidate-head">
+          <h2>{{ item.donor.code }}</h2>
+          {% if item.result.hard_stop %}
+          <p class="match-status match-status-stop">Blocked · carrier conflict</p>
+          {% else %}
+          <p class="match-status">Medical rank {{ item.result.score }}</p>
+          {% endif %}
+        </div>
+        <p class="meta">
+          Blood {{ item.donor.blood_type or "not recorded" }}
+          {% if item.donor.rh %}{{ rh_labels[item.donor.rh] }}{% endif %}
+          · {{ cmv_status_labels[item.donor.cmv] }}
+          · panel {{ item.donor.panel or "not in the record" }}
+          {% if item.donor.motility_total_pct is not none %}
+          · motility {{ "%.1f"|format(item.donor.motility_total_pct) }}% / progressive {{ "%.1f"|format(item.donor.motility_progressive_pct) }}%
+          {% endif %}
+        </p>
+
+        {% if item.carriers or item.couple_carriers %}
+        <div class="visit-carrier-grid">
+          {% if item.carriers %}
+          <div>
+            <h3>Donor carriers</h3>
+            <ul class="reasons">
+              {% for row in item.carriers %}
+              <li>{{ row.gene }} · {{ zygosity_labels[row.zygosity] }}{% if row.condition %} · {{ row.condition }}{% endif %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if item.couple_carriers %}
+          <div>
+            <h3>Couple carriers</h3>
+            <ul class="reasons">
+              {% for row in item.couple_carriers %}
+              <li>{{ row.gene }} · {{ zygosity_labels[row.zygosity] }}{% if row.condition %} · {{ row.condition }}{% endif %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if appointment.status == "booked" %}
+        <form method="post" action="/counselor/appointments/{{ appointment.id }}/donors/{{ item.donor.id }}/report" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}" />
+          <button type="submit">Run AI report</button>
+        </form>
+        {% endif %}
+
+        {% if item.sentences %}
+        <div class="visit-report">
+          <h3>Report</h3>
+          <ul class="reasons">
+            {% for sentence in item.sentences %}
+            <li><span class="visit-report-field">{{ sentence.field }}</span> {{ sentence.text }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty-state">No candidates on this visit.</p>
+  {% endif %}
+</section>
+{% endblock %}

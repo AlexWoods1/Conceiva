@@ -25,7 +25,12 @@ QUARANTINE = ("cleared", "in_quarantine")
 # * default is the new-donor placeholder; geo-* remain optional DiceBear stand-ins.
 PHOTO_KEYS = ("default", "geo-1", "geo-2", "geo-3", "geo-4", "geo-5", "geo-6")
 ADULT_PHOTO_KEYS = ("adult-1", "adult-2")
-ROLES = ("couple", "bank")
+ROLES = ("couple", "bank", "counselor")
+# * Cap so a counselor can discuss each candidate in one visit.
+MAX_SHORTLIST = 20
+DEFAULT_SLOT_MINUTES = 45
+APPOINTMENT_BOOKED = "booked"
+APPOINTMENT_CANCELLED = "cancelled"
 
 RH_LABELS = {
     "positive": "Rh positive",

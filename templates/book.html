@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Book a counselor{% endblock %}
+{% block body %}
+<h1>Book a counselor</h1>
+<p>
+  Every genetic counselor with an open future slot is listed here.
+  Your shortlist has {{ shortlist_count }} candidate{{ "s" if shortlist_count != 1 else "" }}
+  (cap {{ max_shortlist }}).
+</p>
+{% if shortlist_count < 1 %}
+<p class="error">Add at least one candidate on <a href="/couple/shortlist">Shortlist</a> before booking.</p>
+{% elif not groups %}
+<p>No open counselor slots right now. Ask a counselor to post availability, or use the demo counselor after reseeding.</p>
+{% else %}
+{% for group in groups %}
+<section class="landing-section">
+  <h2>{{ group.display_name }}</h2>
+  <p class="help">{{ group.counselor.email }}</p>
+  <ul class="plain">
+    {% for slot in group.slots %}
+    <li>
+      <form method="post" action="/couple/book" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}" />
+        <input type="hidden" name="slot_id" value="{{ slot.id }}" />
+        <button type="submit">
+          Book {{ slot.starts_at.strftime("%Y-%m-%d %H:%M") }} UTC · {{ slot.duration_minutes }} min
+        </button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endif %}
+<p><a href="/couple/shortlist">Back to shortlist</a></p>
+{% endblock %}

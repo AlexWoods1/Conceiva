@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Visit {{ appointment.id }}{% endblock %}
+{% block body %}
+<section class="visit-page">
+  <p class="match-back"><a href="/couple/appointments">← Visits</a></p>
+
+  <header class="visit-header">
+    <div class="visit-header-copy">
+      <p class="match-kicker">Counselor visit</p>
+      <h1>{{ counselor_name }}</h1>
+      <p class="status-pill status-{{ appointment.status }}">{{ appointment.status }}</p>
+      {% if slot %}
+      <p class="visit-item-when">
+        {{ slot.starts_at.strftime("%a %d %b %Y") }}
+        · {{ slot.starts_at.strftime("%H:%M") }} UTC
+        · {{ slot.duration_minutes }} min
+      </p>
+      {% endif %}
+      {% if appointment.status == "booked" %}
+      <p class="help">Candidate set was fixed at booking. Profiles and reports use live records.</p>
+      {% else %}
+      <p class="help">This visit is cancelled. The counselor slot is open for booking again.</p>
+      {% endif %}
+    </div>
+    {% if appointment.status == "booked" %}
+    <form method="post" action="/couple/appointments/{{ appointment.id }}/cancel" class="visit-actions">
+      <input type="hidden" name="csrf" value="{{ csrf }}" />
+      <button type="submit" class="button-ghost-form">Cancel visit</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <h2 class="visit-section-title">Candidates</h2>
+  {% if candidates %}
+  <div class="rows">
+    {% for donor, result, sentences in candidates %}
+    <article class="donor-row visit-candidate">
+      <div class="donor-copy">
+        <div class="visit-candidate-head">
+          <h2>{{ donor.code }}</h2>
+          {% if result.hard_stop %}
+          <p class="match-status match-status-stop">Blocked · carrier conflict</p>
+          {% else %}
+          <p class="match-status">Medical rank {{ result.score }}</p>
+          {% endif %}
+        </div>
+        {% if sentences %}
+        <h3>Counselor report</h3>
+        <ul class="reasons">
+          {% for item in sentences %}
+          <li>{{ item.text }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="help">No counselor report yet. The counselor runs the AI tool during the visit.</p>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty-state">No candidates on this visit.</p>
+  {% endif %}
+</section>
+{% endblock %}

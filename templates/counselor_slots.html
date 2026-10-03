@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Availability{% endblock %}
+{% block body %}
+<h1>Availability</h1>
+<p>Open slots appear on the couple book page. Taken slots stay listed but cannot be deleted.</p>
+
+<form method="post" action="/counselor/profile" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <label>Display name
+    <input name="display_name" value="{{ profile.display_name }}" maxlength="120" />
+  </label>
+  <button type="submit">Save name</button>
+</form>
+
+<form method="post" action="/counselor/slots" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <label>Start (UTC)
+    <input name="starts_at" type="datetime-local" required />
+  </label>
+  <label>Duration (minutes)
+    <input name="duration_minutes" type="number" min="15" max="180" value="{{ default_minutes }}" required />
+  </label>
+  <button type="submit">Add slot</button>
+</form>
+
+{% if not rows %}
+<p>No slots yet.</p>
+{% else %}
+<ul class="plain">
+  {% for row in rows %}
+  <li>
+    {{ row.slot.starts_at.strftime("%Y-%m-%d %H:%M") }} UTC · {{ row.slot.duration_minutes }} min
+    {% if row.open %}
+    · open
+    <form method="post" action="/counselor/slots/{{ row.slot.id }}/delete" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}" />
+      <button type="submit" class="linkish">Remove</button>
+    </form>
+    {% else %}
+    · not open
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+<p><a href="/counselor">Back to visits</a></p>
+{% endblock %}

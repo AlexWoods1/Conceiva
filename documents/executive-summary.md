@@ -1,33 +1,28 @@
 # SpermMatch — Executive Summary
 
-**Product:** SpermMatch (web app: Donor Match)  
-**Audience:** Couples seeking donor sperm, and sperm banks managing inventory  
-**Scope:** Decision support on user-supplied records — not a diagnosis, lab test, or prediction of a child
+**Product:** SpermMatch  
+**Audience:** Couples choosing a sperm donor who want a genetic counselor in the decision — couples with genetic concerns, same-sex couples, and couples facing infertility  
+**Scope:** An intermediary that lines up donor matches and extended carrier-screening context for a counseling session. Decision support on records the users supply — not a diagnosis, a lab test, or a substitute for a genetic counselor
 
 ## Problem
 
-Choosing a sperm donor today forces couples and clinics to stitch together carrier screens, blood-type notes, bank policies, and preference surveys by hand. Shared recessive carrier status is easy to miss. Soft constraints such as CMV, ID-release policy, and family limits are hard to weigh consistently. Banks and couples also pull in opposite directions: inventory utilization versus fewer medical surprises. Existing catalogs rarely explain *why* a match is safe or risky in plain language tied to the source record.
+Couples who find a sperm donor still have to reach a genetic counselor with those potential matches in mind. Extended carrier screening is long, shared recessive risks are easy to miss, and the appointment often starts with the counselor reconstructing which donors are in play. Access is slow, and the session is spent catching up instead of deciding.
+
+Couples, genetic counselors, and sperm banks sit in separate systems. Banks hold inventory and motility data. Counselors hold the clinical conversation. Couples hold screening results and a shortlist. Nothing in the middle prepares the visit.
 
 ## Goal
 
-Give couples and sperm banks one place to compare confirmed carrier results and survey preferences, surface hard medical conflicts first, and explain each ranked result from the fields on file — so matching decisions are clearer, more consistent, and less likely to overlook a shared recessive risk.
+Give couples one place to hold potential sperm-donor matches, connect with a genetic counselor who already sees that shortlist, and receive a plain-language summary of complications from extended carrier screening. Faster access to a counselor, and a better-prepared session.
 
-## What this project does
+## What separates SpermMatch
 
-- **Carrier-aware matching:** Ranks donors for a couple. A shared confirmed recessive gene (for example both heterozygous for CFTR) is a hard stop and stays visible. Soft weights cover ID release, family limit, CMV, and quarantine. Rh mismatch is an informational flag, not a block.
-- **Two roles, one site:** Couples complete history, a carrier form, and a two-step survey. Banks maintain per-donor surveys and can confirm fields parsed from a public catalog URL (with a human confirm step; images are not kept).
-- **Explainable results:** Match explanations cite retrieved database fields. Missing facts are stated as not in the record. Clinical free text is redacted or kept out of model context. An optional LLM only sees those retrieved fields.
-- **Ancestry as context only:** Overlap may note allele-frequency context. It does not change the medical rank. There is no race filter.
-- **Consent and privacy:** Genetic fields and scores sit behind sign-in and consent. Account close deletes genotypes, surveys, portrait keys, and explanation logs. Portraits are open-source stand-ins, not donor or child photographs and not phenotype predictions.
-- **Demo-ready seed data:** Synthetic donors (including clear matches, carrier conflicts, soft-preference misses, and incomplete panels) so the product can be walked through without real genomes or real photos.
+SpermMatch is the intermediary between couples and genetic counselors, and between genetic counselors and sperm banks.
 
-## What this project deliberately does not do
+- **Shortlist, then counsel:** Couples review potential donors with carrier results in view, then set up a call with a genetic counselor who has those matches in mind.
+- **AI tool for genetic counselors:** Summarizes potential complications from extended carrier screening so the counselor opens the session briefed on conflicts and gaps.
+- **Telehealth appointment setup:** Couples book the genetic-counselor call from the same flow as the donor shortlist.
+- **Sperm-bank integration:** Banks connect donor records so counselors and couples work from the same inventory.
+- **Public VISEM tracking:** Categorizes sperm motility from tracking video and attaches that read to the donor record.
+- **Stripe:** Handles payment for the counselor session and platform charges.
+- **Demo database:** Synthetic donors and screening cases so the path from shortlist to briefing to booked call can be shown without real genomes.
 
-- Predict or generate a future child’s face or appearance  
-- Rank donors by IQ, personality, attractiveness, or other polygenic “optimization” traits  
-- Claim to diagnose disease or replace clinical genetic counseling  
-- Use ancestry or race as a match-quality score  
-
-## Success looks like
-
-A couple can enter history and carrier results, complete preferences, and see a ranked list where medical conflicts appear before preference fit, with each explanation expandable to the stored field. A bank can maintain inventory and confirm catalog-derived fields without inventing genetic claims. Judges and users can follow `/start` with demo accounts and see the hard-stop and soft-weight behavior without real patient data.

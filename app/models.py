@@ -1,10 +1,18 @@
-"""SQLite tables for accounts, surveys, donors, and explanation logs."""
+"""SQLite tables for accounts, surveys, donors, counseling visits, and logs."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -13,7 +21,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    """A couple login or a sperm-bank enterprise login."""
+    """A couple, sperm-bank, or genetic-counselor login."""
 
     __tablename__ = "users"
 
@@ -24,6 +32,15 @@ class User(Base):
     consent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+class CounselorProfile(Base):
+    """Display name shown when a couple books a visit."""
+
+    __tablename__ = "counselor_profiles"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(120), default="")
 
 
 class CoupleProfile(Base):
@@ -121,5 +138,78 @@ class LlmLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     donor_id: Mapped[int] = mapped_column(Integer, index=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ShortlistItem(Base):
+    """One donor a couple saved for counseling. Live list, capped in routes."""
+
+    __tablename__ = "shortlist_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "couple_user_id", "donor_id", name="uq_shortlist_couple_donor"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    couple_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    donor_id: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
+
+
+class AvailabilitySlot(Base):
+    """A counselor's open or bookable time window."""
+
+    __tablename__ = "availability_slots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    counselor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=45)
+
+
+class Appointment(Base):
+    """A booked counselor visit for one couple. Payment is out of scope."""
+
+    __tablename__ = "appointments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    couple_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    counselor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    slot_id: Mapped[int] = mapped_column(
+        ForeignKey("availability_slots.id"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), default="booked")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AppointmentDonor(Base):
+    """Donor ids the couple booked with. Profiles stay live in the donor table."""
+
+    __tablename__ = "appointment_donors"
+    __table_args__ = (
+        UniqueConstraint("appointment_id", "donor_id", name="uq_appointment_donor"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    appointment_id: Mapped[int] = mapped_column(
+        ForeignKey("appointments.id"), index=True
+    )
+    donor_id: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
+
+
+class CandidateReport(Base):
+    """Counselor AI report for one visit candidate. Overwritten on re-run."""
+
+    __tablename__ = "candidate_reports"
+    __table_args__ = (
+        UniqueConstraint("appointment_id", "donor_id", name="uq_candidate_report"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    appointment_id: Mapped[int] = mapped_column(
+        ForeignKey("appointments.id"), index=True
+    )
+    donor_id: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

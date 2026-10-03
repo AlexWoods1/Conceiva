@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
 
-from app.models import Carrier, Donor, User
+from app.constants import DEFAULT_SLOT_MINUTES
+from app.models import AvailabilitySlot, Carrier, CounselorProfile, Donor, User
 from app.security import hash_password
 
 DEMO_COUPLE_EMAIL = "couple@demo.local"
 DEMO_COUPLE_PASSWORD = "demo-couple"
 DEMO_BANK_EMAIL = "bank@demo.local"
 DEMO_BANK_PASSWORD = "demo-bank"
+DEMO_COUNSELOR_EMAIL = "counselor@demo.local"
+DEMO_COUNSELOR_PASSWORD = "demo-counselor"
+DEMO_COUNSELOR_NAME = "Demo Genetic Counselor"
 
 # * Shown on match cards so the seeded rank can be read without opening each row.
 DEMO_BLURBS = {
@@ -41,7 +47,7 @@ DEMO_BLURBS = {
 
 
 def seed_demo(db: Session) -> None:
-    """Insert the demo bank, four donors, and an empty couple login.
+    """Insert the demo bank, donors, couple, counselor, and open slots.
 
     Args:
         db: Open session. The caller commits.
@@ -56,8 +62,28 @@ def seed_demo(db: Session) -> None:
         password_hash=hash_password(DEMO_COUPLE_PASSWORD),
         role="couple",
     )
-    db.add_all([bank, couple])
+    counselor = User(
+        email=DEMO_COUNSELOR_EMAIL,
+        password_hash=hash_password(DEMO_COUNSELOR_PASSWORD),
+        role="counselor",
+    )
+    db.add_all([bank, couple, counselor])
     db.flush()
+    db.add(CounselorProfile(user_id=counselor.id, display_name=DEMO_COUNSELOR_NAME))
+
+    # * Fixed offsets from "now" so the book page always has open future slots.
+    # * Store naive UTC; SQLite does not keep tzinfo reliably.
+    now = datetime.now(timezone.utc).replace(
+        minute=0, second=0, microsecond=0, tzinfo=None
+    )
+    for days in (1, 2, 3, 5, 7):
+        db.add(
+            AvailabilitySlot(
+                counselor_user_id=counselor.id,
+                starts_at=now + timedelta(days=days, hours=15),
+                duration_minutes=DEFAULT_SLOT_MINUTES,
+            )
+        )
 
     donors = [
         Donor(
