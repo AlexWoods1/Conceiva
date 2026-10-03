@@ -113,7 +113,13 @@ def test_survey_penalties_stack_and_stop_at_zero_only_for_a_hard_stop():
             quarantine="in_quarantine",
         ),
     )
-    expected = 100 - ID_RELEASE_PENALTY - FAMILY_LIMIT_PENALTY - CMV_PENALTY - QUARANTINE_PENALTY
+    expected = (
+        100
+        - ID_RELEASE_PENALTY
+        - FAMILY_LIMIT_PENALTY
+        - CMV_PENALTY
+        - QUARANTINE_PENALTY
+    )
 
     assert penalized.score == expected
     assert penalized.hard_stop is False
@@ -135,7 +141,10 @@ def test_survey_penalties_stack_and_stop_at_zero_only_for_a_hard_stop():
     )
     assert stopped.score == 0
     assert stopped.hard_stop is True
-    assert any(reason.value == "CFTR" and reason.kind == "hard_stop" for reason in stopped.reasons)
+    assert any(
+        reason.value == "CFTR" and reason.kind == "hard_stop"
+        for reason in stopped.reasons
+    )
 
 
 def test_rank_results_puts_clear_matches_ahead_of_hard_stops():

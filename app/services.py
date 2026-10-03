@@ -18,7 +18,15 @@ from app.matching import (
     confirmed_genes,
     score_match,
 )
-from app.models import Carrier, CoupleProfile, CoupleSurvey, Donor, LlmLog, PriorHistory, User
+from app.models import (
+    Carrier,
+    CoupleProfile,
+    CoupleSurvey,
+    Donor,
+    LlmLog,
+    PriorHistory,
+    User,
+)
 from app.phenotype import resemblance_score
 
 
@@ -72,13 +80,17 @@ def list_carriers(db: Session, subject_type: str, subject_id: int) -> list[Carri
     return list(
         db.scalars(
             select(Carrier)
-            .where(Carrier.subject_type == subject_type, Carrier.subject_id == subject_id)
+            .where(
+                Carrier.subject_type == subject_type, Carrier.subject_id == subject_id
+            )
             .order_by(Carrier.gene, Carrier.id)
         )
     )
 
 
-def ranked_matches(db: Session, user: User, settings: Settings) -> list[tuple[Donor, MatchResult]]:
+def ranked_matches(
+    db: Session, user: User, settings: Settings
+) -> list[tuple[Donor, MatchResult]]:
     """Rank confirmed donors for a couple.
 
     Args:
@@ -94,7 +106,9 @@ def ranked_matches(db: Session, user: User, settings: Settings) -> list[tuple[Do
     if survey is None or not survey.preferences_done or survey.family_limit is None:
         return []
     profile = get_or_create_profile(db, user.id)
-    couple_rows = [(row.gene, row.zygosity) for row in list_carriers(db, "couple", user.id)]
+    couple_rows = [
+        (row.gene, row.zygosity) for row in list_carriers(db, "couple", user.id)
+    ]
     person = PersonGenetics(
         blood_type=profile.blood_type,
         rh=profile.rh,
@@ -109,8 +123,12 @@ def ranked_matches(db: Session, user: User, settings: Settings) -> list[tuple[Do
     donors = list(db.scalars(select(Donor).where(Donor.catalog_confirmed.is_(True))))
     scored: list[tuple[Donor, MatchResult]] = []
     for donor in donors:
-        donor_rows = [(row.gene, row.zygosity) for row in list_carriers(db, "donor", donor.id)]
-        face = resemblance_score(donor.photo_key, profile.adult_photo_key, settings.enable_face_compare)
+        donor_rows = [
+            (row.gene, row.zygosity) for row in list_carriers(db, "donor", donor.id)
+        ]
+        face = resemblance_score(
+            donor.photo_key, profile.adult_photo_key, settings.enable_face_compare
+        )
         offer = DonorOffer(
             code=donor.code,
             blood_type=donor.blood_type,
@@ -124,16 +142,22 @@ def ranked_matches(db: Session, user: User, settings: Settings) -> list[tuple[Do
             id_release_policy=donor.id_release_policy,
         )
         scored.append((donor, score_match(person, prefs, offer, face_score=face)))
-    scored.sort(key=lambda item: (item[1].hard_stop, -item[1].score, item[0].code, item[0].id))
+    scored.sort(
+        key=lambda item: (item[1].hard_stop, -item[1].score, item[0].code, item[0].id)
+    )
     return scored
 
 
-def packet_for(db: Session, user: User, donor: Donor, result: MatchResult) -> ExplainPacket:
+def packet_for(
+    db: Session, user: User, donor: Donor, result: MatchResult
+) -> ExplainPacket:
     """Build the explanation packet for one ranked donor."""
     profile = get_or_create_profile(db, user.id)
     survey = get_or_create_survey(db, user.id)
     history = db.get(PriorHistory, user.id)
-    couple_rows = [(row.gene, row.zygosity) for row in list_carriers(db, "couple", user.id)]
+    couple_rows = [
+        (row.gene, row.zygosity) for row in list_carriers(db, "couple", user.id)
+    ]
     person = PersonGenetics(
         blood_type=profile.blood_type,
         rh=profile.rh,
@@ -176,7 +200,12 @@ def store_explanation(
     """Persist an explanation log."""
     body = json.dumps(
         [
-            {"text": item.text, "field": item.field, "value": item.value, "kind": item.kind}
+            {
+                "text": item.text,
+                "field": item.field,
+                "value": item.value,
+                "kind": item.kind,
+            }
             for item in sentences
         ]
     )
@@ -201,22 +230,31 @@ def latest_explanation(db: Session, user_id: int, donor_id: int) -> list[CitedSe
         return []
     payload = json.loads(row.body)
     return [
-        CitedSentence(item["text"], item["field"], item["value"], item["kind"]) for item in payload
+        CitedSentence(item["text"], item["field"], item["value"], item["kind"])
+        for item in payload
     ]
 
 
 def delete_account(db: Session, user: User) -> None:
     """Delete genetic fields, surveys, photos keys, donors, and LLM logs."""
     if user.role == "couple":
-        db.execute(delete(Carrier).where(Carrier.subject_type == "couple", Carrier.subject_id == user.id))
+        db.execute(
+            delete(Carrier).where(
+                Carrier.subject_type == "couple", Carrier.subject_id == user.id
+            )
+        )
         db.execute(delete(CoupleProfile).where(CoupleProfile.user_id == user.id))
         db.execute(delete(CoupleSurvey).where(CoupleSurvey.user_id == user.id))
         db.execute(delete(PriorHistory).where(PriorHistory.user_id == user.id))
     else:
-        donor_ids = list(db.scalars(select(Donor.id).where(Donor.bank_user_id == user.id)))
+        donor_ids = list(
+            db.scalars(select(Donor.id).where(Donor.bank_user_id == user.id))
+        )
         if donor_ids:
             db.execute(
-                delete(Carrier).where(Carrier.subject_type == "donor", Carrier.subject_id.in_(donor_ids))
+                delete(Carrier).where(
+                    Carrier.subject_type == "donor", Carrier.subject_id.in_(donor_ids)
+                )
             )
             db.execute(delete(Donor).where(Donor.id.in_(donor_ids)))
     db.execute(delete(LlmLog).where(LlmLog.user_id == user.id))

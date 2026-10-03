@@ -66,7 +66,9 @@ def load_settings() -> Settings:
         database_path=database_path,
         session_secret=session_secret,
         llm_api_key=os.environ.get("LLM_API_KEY", ""),
-        llm_base_url=os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+        llm_base_url=os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").rstrip(
+            "/"
+        ),
         llm_model=os.environ.get("LLM_MODEL", "gpt-4o-mini"),
         enable_face_compare=ENABLE_FACE_COMPARE,
         seed_on_empty=_as_bool("SEED_ON_EMPTY", "true"),

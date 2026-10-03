@@ -171,7 +171,10 @@ def score_match(
             )
         )
 
-    if prefs.id_release != "either" and donor.id_release_policy not in {prefs.id_release, "either"}:
+    if prefs.id_release != "either" and donor.id_release_policy not in {
+        prefs.id_release,
+        "either",
+    }:
         score -= ID_RELEASE_PENALTY
         reasons.append(
             Reason(
@@ -248,7 +251,9 @@ def score_match(
     if hard_stop:
         score = 0
     score = max(score, 0)
-    return MatchResult(score=score, hard_stop=hard_stop, reasons=reasons, face_score=face_score)
+    return MatchResult(
+        score=score, hard_stop=hard_stop, reasons=reasons, face_score=face_score
+    )
 
 
 def rank_results(rows: list[tuple[str, MatchResult]]) -> list[tuple[str, MatchResult]]:

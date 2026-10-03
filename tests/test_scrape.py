@@ -6,14 +6,22 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.scrape import fetch_catalog_html, parse_catalog, robots_allows, validate_public_url
+from app.scrape import (
+    fetch_catalog_html,
+    parse_catalog,
+    robots_allows,
+    validate_public_url,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "catalog.html"
 
 
 def _resolver(*addresses: str):
     def resolve(_host, _port):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 0)) for address in addresses]
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 0))
+            for address in addresses
+        ]
 
     return resolve
 
@@ -61,11 +69,17 @@ def test_validate_public_url_rejects_unsafe_targets():
     with pytest.raises(ValueError, match="did not resolve"):
         validate_public_url("https://example.com/catalog", resolver=_failing_resolver)
     with pytest.raises(ValueError, match="did not resolve"):
-        validate_public_url("https://example.com/catalog", resolver=lambda _host, _port: [])
+        validate_public_url(
+            "https://example.com/catalog", resolver=lambda _host, _port: []
+        )
     with pytest.raises(ValueError, match="not a public"):
-        validate_public_url("https://example.com/catalog", resolver=_resolver("8.8.8.8", "10.1.1.1"))
+        validate_public_url(
+            "https://example.com/catalog", resolver=_resolver("8.8.8.8", "10.1.1.1")
+        )
     with pytest.raises(ValueError, match="not a public"):
-        validate_public_url("https://example.com/catalog", resolver=_resolver("127.0.0.1"))
+        validate_public_url(
+            "https://example.com/catalog", resolver=_resolver("127.0.0.1")
+        )
 
     raw = "  https://example.com/catalog  "
     assert validate_public_url(raw, resolver=_resolver("8.8.8.8")) == raw
@@ -78,7 +92,9 @@ def test_fetch_catalog_html_returns_a_public_page():
         if request.url.path == "/robots.txt":
             return httpx.Response(200, text="User-agent: *\nAllow: /catalog\n")
         assert request.url.path == "/catalog"
-        return httpx.Response(200, headers={"content-type": "text/html; charset=utf-8"}, text=html)
+        return httpx.Response(
+            200, headers={"content-type": "text/html; charset=utf-8"}, text=html
+        )
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         body = fetch_catalog_html(
@@ -109,7 +125,9 @@ def test_fetch_catalog_html_rejects_blocked_or_unusable_responses():
                 content=b"x" * 1_000_001,
             )
         if request.url.host == "image.example":
-            return httpx.Response(200, headers={"content-type": "image/png"}, content=b"png")
+            return httpx.Response(
+                200, headers={"content-type": "image/png"}, content=b"png"
+            )
         if request.url.host == "page-down.example":
             raise httpx.ConnectError("page down")
         return httpx.Response(200, headers={"content-type": "text/plain"}, text="ok")

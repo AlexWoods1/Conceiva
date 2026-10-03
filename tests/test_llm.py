@@ -40,9 +40,13 @@ def _packet(hard_stop: bool = False):
                 "Both profiles list CFTR as a confirmed recessive carrier. This is a hard stop.",
             )
         )
-    couple = PersonGenetics("O", "negative", "Finnish", frozenset({"CFTR"}) if hard_stop else frozenset())
+    couple = PersonGenetics(
+        "O", "negative", "Finnish", frozenset({"CFTR"}) if hard_stop else frozenset()
+    )
     prefs = Preference("either", 10, "any")
-    result = MatchResult(score=0 if hard_stop else 100, hard_stop=hard_stop, reasons=reasons)
+    result = MatchResult(
+        score=0 if hard_stop else 100, hard_stop=hard_stop, reasons=reasons
+    )
     return build_explain_packet(
         couple=couple,
         prefs=prefs,
@@ -93,8 +97,13 @@ def test_build_explain_packet_keeps_zero_counts_and_redacts_conditions():
 def test_deterministic_explain_cites_facts_and_absences():
     sentences = deterministic_explain(_packet())
 
-    assert any(item.field == "donor.panel" and item.kind == "record" for item in sentences)
-    assert any(item.kind == "missing" and item.field == "history.prior_donors" for item in sentences)
+    assert any(
+        item.field == "donor.panel" and item.kind == "record" for item in sentences
+    )
+    assert any(
+        item.kind == "missing" and item.field == "history.prior_donors"
+        for item in sentences
+    )
 
 
 def test_filter_model_sentences_drops_unknown_fields():
@@ -139,7 +148,9 @@ def _model_client(payload: dict | str, status_code: int = 200) -> httpx.Client:
         assert body["model"] == "test-model"
         if status_code != 200:
             return httpx.Response(status_code, json={"error": "down"})
-        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": content}}]}
+        )
 
     return httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -147,7 +158,9 @@ def _model_client(payload: dict | str, status_code: int = 200) -> httpx.Client:
 def test_explain_keeps_a_hard_stop_the_model_omits(caplog):
     packet = _packet(hard_stop=True)
     settings = _settings(llm_api_key="test-key")
-    with _model_client({"sentences": [{"text": "Panel is listed.", "field": "donor.panel"}]}) as client:
+    with _model_client(
+        {"sentences": [{"text": "Panel is listed.", "field": "donor.panel"}]}
+    ) as client:
         sentences = explain(packet, settings, client)
 
     assert sentences[0].kind == "hard_stop"
@@ -177,7 +190,9 @@ def test_explain_falls_back_when_the_model_fails(caplog):
     settings = _settings(llm_api_key="test-key")
     local = deterministic_explain(packet)
 
-    with _model_client({"sentences": [{"text": "Nope.", "field": "not.real"}]}) as client:
+    with _model_client(
+        {"sentences": [{"text": "Nope.", "field": "not.real"}]}
+    ) as client:
         assert explain(packet, settings, client) == local
     assert "cited no known fields" in caplog.text
 

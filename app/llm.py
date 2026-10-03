@@ -72,7 +72,8 @@ def build_explain_packet(
         Facts and missing field names.
     """
     facts = [
-        Fact(reason.field, reason.value, reason.text, reason.kind) for reason in result.reasons
+        Fact(reason.field, reason.value, reason.text, reason.kind)
+        for reason in result.reasons
     ]
     missing: list[str] = []
     if donor_panel.strip():
@@ -158,7 +159,8 @@ def deterministic_explain(packet: ExplainPacket) -> list[CitedSentence]:
         Cited sentences. Missing fields say they are not in the record.
     """
     sentences = [
-        CitedSentence(fact.text, fact.field, fact.value, fact.kind) for fact in packet.facts
+        CitedSentence(fact.text, fact.field, fact.value, fact.kind)
+        for fact in packet.facts
     ]
     for name in packet.missing:
         sentences.append(
@@ -186,7 +188,11 @@ def filter_model_sentences(payload: dict, packet: ExplainPacket) -> list[CitedSe
         field_name = str(item.get("field", ""))
         text = str(item.get("text", "")).strip()
         if field_name in missing:
-            kept.append(CitedSentence(f"Not in the record: {field_name}.", field_name, "", "missing"))
+            kept.append(
+                CitedSentence(
+                    f"Not in the record: {field_name}.", field_name, "", "missing"
+                )
+            )
             continue
         fact = allowed.get(field_name)
         if fact is None or not text:
@@ -212,7 +218,8 @@ def _merge_hard_stops(
 def _call_llm(packet: ExplainPacket, settings: Settings, client: httpx.Client) -> dict:
     """Call an OpenAI-compatible chat endpoint and parse a JSON object."""
     fact_payload = [
-        {"field": fact.field, "value": fact.value, "text": fact.text} for fact in packet.facts
+        {"field": fact.field, "value": fact.value, "text": fact.text}
+        for fact in packet.facts
     ]
     body = {
         "model": settings.llm_model,
@@ -231,7 +238,9 @@ def _call_llm(packet: ExplainPacket, settings: Settings, client: httpx.Client) -
             },
             {
                 "role": "user",
-                "content": json.dumps({"facts": fact_payload, "missing": packet.missing}),
+                "content": json.dumps(
+                    {"facts": fact_payload, "missing": packet.missing}
+                ),
             },
         ],
     }
@@ -273,11 +282,15 @@ def explain(
         payload = _call_llm(packet, settings, http)
         checked = filter_model_sentences(payload, packet)
         if not checked:
-            logger.warning("LLM explanation cited no known fields; using the record text.")
+            logger.warning(
+                "LLM explanation cited no known fields; using the record text."
+            )
             return local
         return _merge_hard_stops(checked, local)
     except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
-        logger.warning("LLM explanation failed (%s); using the record text.", type(exc).__name__)
+        logger.warning(
+            "LLM explanation failed (%s); using the record text.", type(exc).__name__
+        )
         return local
     finally:
         if close_client:

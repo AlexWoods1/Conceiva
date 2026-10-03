@@ -37,9 +37,18 @@ def test_register_rejects_bad_input_and_stores_a_normalized_email(api):
     api.get("/login")
     too_long = ("a" * 251) + "@b.co"
     cases = [
-        ({"email": "a@b.co", "password": TEST_PASSWORD, "role": "admin"}, "Choose couple"),
-        ({"email": "not-an-email", "password": TEST_PASSWORD, "role": "couple"}, "Enter an email"),
-        ({"email": too_long, "password": TEST_PASSWORD, "role": "couple"}, "Enter an email"),
+        (
+            {"email": "a@b.co", "password": TEST_PASSWORD, "role": "admin"},
+            "Choose couple",
+        ),
+        (
+            {"email": "not-an-email", "password": TEST_PASSWORD, "role": "couple"},
+            "Enter an email",
+        ),
+        (
+            {"email": too_long, "password": TEST_PASSWORD, "role": "couple"},
+            "Enter an email",
+        ),
         ({"email": "a@b.co", "password": "short", "role": "couple"}, "at least 8"),
     ]
     for form, message in cases:
@@ -67,7 +76,9 @@ def test_login_logout_and_csrf(api):
     api.post("/logout")
     api.get("/login")
 
-    rejected = api.client.post("/login", data={"email": "person@example.com", "password": TEST_PASSWORD})
+    rejected = api.client.post(
+        "/login", data={"email": "person@example.com", "password": TEST_PASSWORD}
+    )
     assert rejected.status_code == 400
     assert rejected.json()["detail"] == "CSRF check failed."
 
@@ -77,18 +88,24 @@ def test_login_logout_and_csrf(api):
     )
     assert mismatch.status_code == 400
 
-    wrong = api.post("/login", {"email": "person@example.com", "password": "wrong-pass"})
+    wrong = api.post(
+        "/login", {"email": "person@example.com", "password": "wrong-pass"}
+    )
     assert wrong.status_code == 400
     assert "does not match" in wrong.json()["error"]
 
-    signed_in = api.post("/login", {"email": "person@example.com", "password": TEST_PASSWORD})
+    signed_in = api.post(
+        "/login", {"email": "person@example.com", "password": TEST_PASSWORD}
+    )
     assert signed_in.status_code == 303
     assert signed_in.headers["location"] == "/consent"
 
     api.post("/consent", {"agree": "yes"})
     api.post("/logout")
     api.get("/login")
-    signed_in_again = api.post("/login", {"email": "Person@Example.com", "password": TEST_PASSWORD})
+    signed_in_again = api.post(
+        "/login", {"email": "Person@Example.com", "password": TEST_PASSWORD}
+    )
     assert signed_in_again.headers["location"] == "/couple/history"
 
     logged_out = api.post("/logout")
@@ -128,7 +145,10 @@ def test_account_delete_requires_confirmation(api):
     assert removed.headers["location"] == "/"
     db = api.session()
     try:
-        assert db.scalars(select(User).where(User.email == "person@example.com")).first() is None
+        assert (
+            db.scalars(select(User).where(User.email == "person@example.com")).first()
+            is None
+        )
     finally:
         db.close()
 
@@ -177,7 +197,9 @@ def test_couple_survey_match_and_explanation(api):
     genes = api.get("/couple/carriers").json()["genes"]
     assert genes == ["CFTR"]
 
-    invalid = api.post("/couple/carriers", {"gene": "C F", "zygosity": "heterozygous", "condition": ""})
+    invalid = api.post(
+        "/couple/carriers", {"gene": "C F", "zygosity": "heterozygous", "condition": ""}
+    )
     assert invalid.status_code == 400
 
     db = api.session()
@@ -195,16 +217,25 @@ def test_couple_survey_match_and_explanation(api):
         {"cmv_requirement": "any", "ancestry": "Finnish", "clinical_notes": "notes"},
     )
     assert clinical.headers["location"] == "/couple/survey/preferences"
-    bad_cmv = api.post("/couple/survey/clinical", {"cmv_requirement": "sometimes", "ancestry": "", "clinical_notes": ""})
+    bad_cmv = api.post(
+        "/couple/survey/clinical",
+        {"cmv_requirement": "sometimes", "ancestry": "", "clinical_notes": ""},
+    )
     assert bad_cmv.status_code == 400
 
-    preferences = api.post("/couple/survey/preferences", {"id_release": "either", "family_limit": "10"})
+    preferences = api.post(
+        "/couple/survey/preferences", {"id_release": "either", "family_limit": "10"}
+    )
     assert preferences.headers["location"] == "/match"
-    bad_limit = api.post("/couple/survey/preferences", {"id_release": "either", "family_limit": "0"})
+    bad_limit = api.post(
+        "/couple/survey/preferences", {"id_release": "either", "family_limit": "0"}
+    )
     assert bad_limit.status_code == 400
 
     listing = api.get("/match")
-    assert listing.json()["rows"] == [{"code": "DN-100", "score": 100, "hard_stop": False}]
+    assert listing.json()["rows"] == [
+        {"code": "DN-100", "score": 100, "hard_stop": False}
+    ]
     assert api.get("/match/999").status_code == 404
 
     db = api.session()
@@ -218,7 +249,10 @@ def test_couple_survey_match_and_explanation(api):
     assert any("Blood types" in sentence for sentence in detail.json()["sentences"])
     db = api.session()
     try:
-        assert db.scalars(select(LlmLog).where(LlmLog.donor_id == donor_id)).first() is not None
+        assert (
+            db.scalars(select(LlmLog).where(LlmLog.donor_id == donor_id)).first()
+            is not None
+        )
     finally:
         db.close()
 
@@ -351,7 +385,9 @@ def test_face_compare_keeps_an_allowed_portrait(face_api):
 
 def test_bank_donor_crud_is_limited_to_the_owner(api):
     _consent(api, "bank@example.com", role="bank")
-    invalid = api.post("/bank/donors/new", {"code": "", "blood_type": "O", "rh": "negative"})
+    invalid = api.post(
+        "/bank/donors/new", {"code": "", "blood_type": "O", "rh": "negative"}
+    )
     assert invalid.status_code == 400
     assert "donor code" in invalid.json()["error"]
 
@@ -444,11 +480,15 @@ def test_catalog_fetch_saves_the_source_url(api, monkeypatch):
     monkeypatch.setattr("app.routes.fetch_catalog_html", fake_fetch)
     _consent(api, "bank@example.com", role="bank")
 
-    blocked = api.post("/bank/catalog/fetch", {"url": "https://catalog.example/blocked"})
+    blocked = api.post(
+        "/bank/catalog/fetch", {"url": "https://catalog.example/blocked"}
+    )
     assert blocked.status_code == 400
     assert "disallows" in blocked.json()["error"]
 
-    empty_page = api.post("/bank/catalog/fetch", {"url": "https://catalog.example/empty"})
+    empty_page = api.post(
+        "/bank/catalog/fetch", {"url": "https://catalog.example/empty"}
+    )
     assert empty_page.status_code == 400
     assert "No donor records" in empty_page.json()["error"]
 

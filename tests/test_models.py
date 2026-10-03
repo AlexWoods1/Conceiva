@@ -2,7 +2,15 @@
 
 from datetime import datetime, timezone
 
-from app.models import Carrier, CoupleProfile, CoupleSurvey, Donor, LlmLog, PriorHistory, User
+from app.models import (
+    Carrier,
+    CoupleProfile,
+    CoupleSurvey,
+    Donor,
+    LlmLog,
+    PriorHistory,
+    User,
+)
 from app.security import hash_password
 
 
@@ -15,7 +23,11 @@ def test_rows_round_trip(db):
     )
     db.add(user)
     db.flush()
-    db.add(CoupleProfile(user_id=user.id, blood_type="A", rh="positive", adult_photo_key="adult-1"))
+    db.add(
+        CoupleProfile(
+            user_id=user.id, blood_type="A", rh="positive", adult_photo_key="adult-1"
+        )
+    )
     db.add(
         PriorHistory(
             user_id=user.id,
