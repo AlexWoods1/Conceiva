@@ -1,120 +1,208 @@
 {% extends "base.html" %}
 {% block title %}Matches{% endblock %}
+{% block body_class %}page-deck{% endblock %}
 {% block body %}
-<h1>Ranked donors</h1>
-<p>Clear medical matches come first. A carrier conflict stays on the row and is not hidden. Blood type on your history is the parent's type, shown here next to the donor's type.</p>
-<p>
-  Shortlist {{ shortlist_count }} of {{ max_shortlist }} ·
-  <a href="/couple/shortlist">Open shortlist</a> ·
-  <a href="/couple/book">Book a counselor</a>
-</p>
-{% if not survey.preferences_done %}
-<p>Save both survey steps to see a ranked list.</p>
-{% else %}
-<form method="get" action="/match" class="trait-filters">
-  <p class="help">Filter by physical traits. Filters only hide donors; they never change the medical rank. A donor with a trait not recorded is hidden by that filter.</p>
-  <label>Hair color
-    <select name="hair_color">
-      <option value="">Any</option>
-      {% for item in hair_colors %}
-      <option value="{{ item }}" {% if trait_filter.hair_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Hair type
-    <select name="hair_type">
-      <option value="">Any</option>
-      {% for item in hair_types %}
-      <option value="{{ item }}" {% if trait_filter.hair_type == item %}selected{% endif %}>{{ item|capitalize }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Eye color
-    <select name="eye_color">
-      <option value="">Any</option>
-      {% for item in eye_colors %}
-      <option value="{{ item }}" {% if trait_filter.eye_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Min height (cm)
-    <input name="min_height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ trait_filter.min_height_cm if trait_filter.min_height_cm is not none else '' }}" />
-  </label>
-  <label>Max height (cm)
-    <input name="max_height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ trait_filter.max_height_cm if trait_filter.max_height_cm is not none else '' }}" />
-  </label>
-  <label>Max BMI
-    <input name="max_bmi" type="number" min="10" max="60" step="0.1" value="{{ trait_filter.max_bmi if trait_filter.max_bmi is not none else '' }}" />
-  </label>
-  <button type="submit">Apply filters</button>
-  {% if trait_filter.active %}<a href="/match">Clear filters</a>{% endif %}
-</form>
-{% if trait_filter.active and hidden_count %}
-<p class="help">{{ hidden_count }} donor{{ "s" if hidden_count != 1 }} hidden by your filters.</p>
-{% endif %}
-{% if not rows %}
-<p>{% if trait_filter.active %}No donors match these filters.{% else %}No confirmed donors are on file.{% endif %}</p>
-{% else %}
-<div class="rows">
-  {% for donor, result in rows %}
-  <article class="donor-row">
-    <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" width="128" height="128" />
-    <div class="donor-copy">
-      {% if result.hard_stop %}
-      <p class="stop">Carrier conflict. Not a candidate.</p>
-      {% endif %}
-      <h2>{{ donor.code }}</h2>
-      {% if result.hard_stop %}
-      <p class="score">Blocked</p>
-      {% else %}
-      <p class="score">Medical rank {{ result.score }}</p>
-      {% endif %}
-      <p class="meta">
-        Donor blood {{ donor.blood_type or "not recorded" }}
-        {% if donor.rh %}{{ rh_labels[donor.rh] }}{% endif %}
-        · {{ cmv_status_labels[donor.cmv] }}
-        · {{ quarantine_labels[donor.quarantine] }}
-        · family limit {{ donor.family_limit }}
-        · {{ id_release_labels[donor.id_release_policy] }}
-      </p>
-      {% set traits = trait_summary(donor) %}
-      {% if traits or donor.ethnicity %}
-      <p class="meta traits">
-        {{ traits|join(" · ") }}
-        {% if donor.ethnicity %}{% if traits %} · {% endif %}Ethnicity (donor-reported): {{ donor.ethnicity }}{% endif %}
-      </p>
-      {% endif %}
-      {% if demo_blurbs.get(donor.code) %}
-      <p class="help">{{ demo_blurbs[donor.code] }}</p>
-      {% endif %}
-      <ul class="reasons">
-        {% for reason in result.reasons if reason.kind == "hard_stop" %}
-        <li>{{ reason.text }}</li>
-        {% endfor %}
-        {% for reason in result.reasons if reason.kind != "hard_stop" %}
-        <li>{{ reason.text }}</li>
-        {% endfor %}
-      </ul>
-      <p class="caption">Synthetic stand-in. Not a donor, not a child, and not a prediction.</p>
-      {% if face_compare and result.face_score is not none %}
-      <p>Non-clinical resemblance stub: {{ result.face_score }}. Not part of the medical rank.</p>
-      {% endif %}
-      <a href="/match/{{ donor.id }}">Open explanation</a>
-      {% if donor.id in shortlisted_ids %}
-      <form method="post" action="/couple/shortlist/{{ donor.id }}/remove" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}" />
-        <button type="submit" class="linkish">Remove from shortlist</button>
-      </form>
-      {% else %}
-      <form method="post" action="/couple/shortlist/{{ donor.id }}/add" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}" />
-        <button type="submit" class="linkish">Add to shortlist</button>
-      </form>
-      {% endif %}
+<section class="deck-page">
+  <header class="deck-head">
+    <div>
+      <p class="eyebrow">Your matches</p>
+      <h1 class="display">Ranked donors</h1>
+      <p class="help">Clear medical matches come first. A carrier conflict stays on the card and is not hidden. Swipe right to shortlist, left to pass.</p>
     </div>
-  </article>
-  {% endfor %}
-</div>
-{% endif %}
-{% endif %}
+    <div class="deck-tools">
+      <a class="pill pill-heart" href="/couple/shortlist">&#9829; <span>Shortlist <span data-shortlist-count>{{ shortlist_count }}</span>/{{ max_shortlist }}</span></a>
+      <a class="pill" href="/couple/book">Book a counselor</a>
+      <div class="view-toggle" data-view-toggle hidden>
+        <button type="button" data-view="cards" aria-pressed="true">Cards</button>
+        <button type="button" data-view="list" aria-pressed="false">List</button>
+      </div>
+    </div>
+  </header>
+
+  {% if not survey.preferences_done %}
+  <p class="empty-state">Save both survey steps to see your donor deck.</p>
+  {% else %}
+  <details class="filter-drawer" {% if trait_filter.active %}open{% endif %}>
+    <summary>
+      <span>Filters</span>
+      {% if trait_filter.active %}<span class="filter-dot">On</span>{% endif %}
+    </summary>
+    <form method="get" action="/match" class="trait-filters">
+      <p class="help">Filters only hide donors; they never change the medical rank. A donor with a trait not recorded is hidden by that filter.</p>
+      <label>Hair color
+        <select name="hair_color">
+          <option value="">Any</option>
+          {% for item in hair_colors %}
+          <option value="{{ item }}" {% if trait_filter.hair_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Hair type
+        <select name="hair_type">
+          <option value="">Any</option>
+          {% for item in hair_types %}
+          <option value="{{ item }}" {% if trait_filter.hair_type == item %}selected{% endif %}>{{ item|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Eye color
+        <select name="eye_color">
+          <option value="">Any</option>
+          {% for item in eye_colors %}
+          <option value="{{ item }}" {% if trait_filter.eye_color == item %}selected{% endif %}>{{ item|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Min height (cm)
+        <input name="min_height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ trait_filter.min_height_cm if trait_filter.min_height_cm is not none else '' }}" />
+      </label>
+      <label>Max height (cm)
+        <input name="max_height_cm" type="number" min="{{ height_min }}" max="{{ height_max }}" value="{{ trait_filter.max_height_cm if trait_filter.max_height_cm is not none else '' }}" />
+      </label>
+      <label>Max BMI
+        <input name="max_bmi" type="number" min="10" max="60" step="0.1" value="{{ trait_filter.max_bmi if trait_filter.max_bmi is not none else '' }}" />
+      </label>
+      <div class="filter-actions">
+        <button type="submit">Apply filters</button>
+        {% if trait_filter.active %}<a href="/match">Clear filters</a>{% endif %}
+      </div>
+    </form>
+  </details>
+  {% if trait_filter.active and hidden_count %}
+  <p class="help">{{ hidden_count }} donor{{ "s" if hidden_count != 1 }} hidden by your filters.</p>
+  {% endif %}
+
+  {% if not rows %}
+  <p class="empty-state">{% if trait_filter.active %}No donors match these filters.{% else %}No confirmed donors are on file.{% endif %}</p>
+  {% else %}
+  <div class="deck" data-deck>
+    {% for donor, result in rows %}
+    {% set traits = trait_summary(donor) %}
+    {% set shortlisted = donor.id in shortlisted_ids %}
+    <article class="swipe-card{% if result.hard_stop %} is-blocked{% endif %}" data-card data-code="{{ donor.code }}" data-shortlisted="{{ 'true' if shortlisted else 'false' }}">
+      <div class="card-photos" data-photos>
+        <div class="photo-bars" aria-hidden="true">
+          {% if donor.baby_photo_key %}<span class="is-active"></span><span></span>{% else %}<span class="is-active"></span>{% endif %}
+        </div>
+        {% if donor.baby_photo_key %}
+        <figure class="card-photo is-active" data-photo>
+          <img src="/static/photos/{{ donor.baby_photo_key }}.jpg" alt="Childhood photo of donor {{ donor.code }}" loading="lazy" draggable="false" />
+          <figcaption>Donor as a child</figcaption>
+        </figure>
+        {% endif %}
+        <figure class="card-photo{% if not donor.baby_photo_key %} is-active{% endif %}" data-photo>
+          <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" loading="lazy" draggable="false" />
+          <figcaption>Synthetic stand-in portrait</figcaption>
+        </figure>
+        {% if donor.baby_photo_key %}
+        <button type="button" class="photo-nav photo-prev" data-photo-step="-1" aria-label="Previous photo"></button>
+        <button type="button" class="photo-nav photo-next" data-photo-step="1" aria-label="Next photo"></button>
+        {% endif %}
+        <span class="stamp stamp-like" aria-hidden="true">Shortlist</span>
+        <span class="stamp stamp-nope" aria-hidden="true">Pass</span>
+        <div class="card-overlay">
+          {% if result.hard_stop %}
+          <span class="rank-badge rank-badge-stop">Carrier conflict</span>
+          {% else %}
+          <span class="rank-badge">#{{ loop.index }} &middot; Medical rank {{ result.score }}</span>
+          {% endif %}
+          <h2>
+            {{ donor.code }}
+            {% if donor.blood_type %}<span class="blood-chip">{{ donor.blood_type }}{% if donor.rh == "negative" %}&minus;{% elif donor.rh == "positive" %}+{% endif %}</span>{% endif %}
+          </h2>
+          {% if traits %}
+          <ul class="chip-row">
+            {% for phrase in traits %}<li>{{ phrase }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card-body donor-copy" data-card-body>
+        {% if result.hard_stop %}
+        <p class="stop">Carrier conflict. Not a candidate.</p>
+        {% endif %}
+        <h3 class="card-body-title">{{ donor.code }} &middot; {% if result.hard_stop %}Blocked{% else %}Medical rank {{ result.score }}{% endif %}</h3>
+        {% if demo_blurbs.get(donor.code) %}
+        <p class="card-blurb">{{ demo_blurbs[donor.code] }}</p>
+        {% endif %}
+        <ul class="fact-chips">
+          <li>Donor blood {{ donor.blood_type or "not recorded" }}{% if donor.rh %} {{ rh_labels[donor.rh] }}{% endif %}</li>
+          <li>{{ cmv_status_labels[donor.cmv] }}</li>
+          <li>{{ quarantine_labels[donor.quarantine] }}</li>
+          <li>Family limit {{ donor.family_limit }}</li>
+          <li>{{ id_release_labels[donor.id_release_policy] }}</li>
+          {% if donor.ethnicity %}<li>Ethnicity (donor-reported): {{ donor.ethnicity }}</li>{% endif %}
+        </ul>
+        <h4>Why this rank</h4>
+        <ul class="reasons">
+          {% for reason in result.reasons if reason.kind == "hard_stop" %}
+          <li class="reason-stop">{{ reason.text }}</li>
+          {% endfor %}
+          {% for reason in result.reasons if reason.kind != "hard_stop" %}
+          <li>{{ reason.text }}</li>
+          {% endfor %}
+        </ul>
+        {% if face_compare and result.face_score is not none %}
+        <p class="help">Non-clinical resemblance stub: {{ result.face_score }}. Not part of the medical rank.</p>
+        {% endif %}
+        <p class="caption">Photos are synthetic stand-ins. The baby photo shows the donor as a child, not a prediction of your child.</p>
+        <p class="card-links">
+          <a href="/match/{{ donor.id }}">Open full profile &amp; explanation</a>
+          {% if shortlisted %}
+          <form method="post" action="/couple/shortlist/{{ donor.id }}/remove" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}" />
+            <button type="submit" class="linkish">Remove from shortlist</button>
+          </form>
+          {% endif %}
+        </p>
+      </div>
+
+      <div class="card-actions">
+        <button type="button" class="action action-nope" data-action="pass" aria-label="Pass on {{ donor.code }}" title="Pass (←)" hidden>&#10005;</button>
+        <button type="button" class="action action-info" data-action="info" aria-label="Details for {{ donor.code }}" title="Details (↑)" hidden>i</button>
+        <form method="post" action="/couple/shortlist/{{ donor.id }}/add" class="inline" data-like-form>
+          <input type="hidden" name="csrf" value="{{ csrf }}" />
+          <button type="submit" class="action action-like{% if shortlisted %} is-on{% endif %}" aria-label="{% if shortlisted %}{{ donor.code }} is on your shortlist{% else %}Add {{ donor.code }} to shortlist{% endif %}" title="Shortlist (→)">&#9829;</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+
+    <div class="deck-empty" data-deck-empty hidden>
+      <p class="deck-empty-icon" aria-hidden="true">&#10047;</p>
+      <h2 class="display">You've seen every donor</h2>
+      <p class="help">Your shortlist now has <span data-shortlist-count>{{ shortlist_count }}</span> candidate{{ "s" if shortlist_count != 1 }}.</p>
+      <div class="hero-cta">
+        <a class="button" href="/couple/shortlist">Open shortlist</a>
+        <button type="button" class="button-ghost-form" data-restart>Start over</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="deck-footer" data-deck-footer hidden>
+    <button type="button" class="pill" data-undo disabled>&#8630; Undo</button>
+    <span class="deck-counter" data-counter></span>
+    <span class="deck-keys">Keys: &larr; pass &middot; &rarr; shortlist &middot; &uarr; details</span>
+  </div>
+  <div class="toast" data-toast role="status" aria-live="polite" hidden></div>
+  <div class="match-modal" data-match-modal role="dialog" aria-modal="true" aria-labelledby="match-modal-title" hidden>
+    <div class="match-modal-card">
+      <p class="eyebrow">Added to your shortlist</p>
+      <h2 id="match-modal-title" class="display">It's a match!</h2>
+      <div class="match-modal-photo">
+        <img data-match-photo src="" alt="" />
+        <span class="match-modal-heart" aria-hidden="true">&#9829;</span>
+      </div>
+      <p class="help" data-match-text></p>
+      <div class="hero-cta">
+        <button type="button" class="button-magenta" data-match-close>Keep swiping</button>
+        <a class="button button-ghost" href="/couple/shortlist">View shortlist</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
 {% endblock %}
+{% block scripts %}<script src="/static/swipe.js" defer></script>{% endblock %}

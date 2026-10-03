@@ -25,6 +25,8 @@ QUARANTINE = ("cleared", "in_quarantine")
 # * default is the new-donor placeholder; geo-* remain optional DiceBear stand-ins.
 PHOTO_KEYS = ("default", "geo-1", "geo-2", "geo-3", "geo-4", "geo-5", "geo-6")
 ADULT_PHOTO_KEYS = ("adult-1", "adult-2")
+# * The donor's own childhood photo, as banks publish them. Never a child prediction.
+BABY_PHOTO_KEYS = ("baby-1", "baby-2", "baby-3", "baby-4", "baby-5", "baby-6")
 ROLES = ("couple", "bank", "counselor")
 # * Cap so a counselor can discuss each candidate in one visit.
 MAX_SHORTLIST = 20

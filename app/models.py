@@ -99,6 +99,7 @@ class Donor(Base):
     rh: Mapped[str] = mapped_column(String(16), default="")
     ancestry: Mapped[str] = mapped_column(String(255), default="")
     photo_key: Mapped[str] = mapped_column(String(32), default="default")
+    baby_photo_key: Mapped[str] = mapped_column(String(32), default="")
     panel: Mapped[str] = mapped_column(String(128), default="")
     cmv: Mapped[str] = mapped_column(String(16), default="unknown")
     quarantine: Mapped[str] = mapped_column(String(32), default="cleared")
