@@ -3,22 +3,25 @@
 {% block body %}
 <article class="policy">
   <h1>Privacy policy</h1>
-  <p>Last updated 2 October 2026. This is a demo policy for Donor Match, not legal advice.</p>
+  <p>Last updated 3 October 2026. This is a demo policy for Donor Match, not legal advice.</p>
 
   <h2>What this demo is</h2>
   <p>
-    Donor Match is decision support for comparing a couple’s carrier form with donor records.
+    Donor Match is decision support for comparing a couple’s carrier form with donor records,
+    shortlisting candidates for a genetic counselor visit, and generating cited counselor reports.
     It is not a diagnosis, not a laboratory, and not a prediction of a child.
   </p>
 
   <h2>Information the demo stores</h2>
   <ul>
-    <li>Account email, a password hash, role (couple or sperm bank), and the time consent was given.</li>
+    <li>Account email, a password hash, role (couple, sperm bank, or genetic counselor), and the time consent was given.</li>
+    <li>Counselor display name and open availability slots.</li>
     <li>Blood type, Rh, prior pregnancies, prior donors, miscarriages, and known family conditions.</li>
     <li>Carrier results: the condition name, the gene code from the report, and how many altered copies.</li>
     <li>Survey answers: ancestry text, CMV preference, clinical notes, ID-release preference, and family limit.</li>
     <li>Donor records a bank saves, including catalog text the bank confirms. Portrait keys point at synthetic drawings.</li>
-    <li>Explanation logs that cite record fields.</li>
+    <li>Couple shortlist entries (at most 20 candidates) and booked visit rows that copy those donor ids at booking time.</li>
+    <li>Explanation logs and counselor candidate reports that cite record fields.</li>
     <li>Contact-form name, email, and message. Those messages are not tied to an account and are not emailed.</li>
   </ul>
 
@@ -32,11 +35,12 @@
 
   <h2>How explanations use records</h2>
   <p>
-    An explanation is built from retrieved fields. If a field is empty, the page says it is not in the record.
-    Clinical notes are stored and are not copied into that explanation.
-    Free-text history is stripped of email addresses and phone numbers before an explanation is written.
+    A couple-facing explanation is built from retrieved fields. If a field is empty, the page says it is not in the record.
+    Clinical notes are stored and are not copied into that couple explanation.
+    A counselor report for a visit candidate may include clinical notes after email and phone redaction, still as cited facts only.
+    Free-text history is stripped of email addresses and phone numbers before a model call.
     If <code>LLM_API_KEY</code> is set, only those retrieved fields are sent to the model endpoint.
-    Without a key, the explanation stays on the stored record.
+    Without a key, the text stays on the stored record.
   </p>
 
   <h2>Catalog pages</h2>
@@ -54,7 +58,9 @@
 
   <h2>Closing an account</h2>
   <p>
-    Account close deletes that login, its genotypes, surveys, history, portrait keys, donor rows owned by that bank, and its explanation logs.
+    Account close deletes that login, its genotypes, surveys, history, portrait keys, shortlist,
+    visits and counselor reports tied to that account, donor rows owned by that bank, counselor
+    slots, and its explanation logs.
     Contact messages are not part of an account. They remain until the database file is removed or the Vercel instance is replaced.
   </p>
 

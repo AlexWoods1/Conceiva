@@ -15,6 +15,8 @@
       <a class="button button-ghost" href="/match">View matches</a>
       {% elif user and user.consent_at and user.role == "bank" %}
       <a class="button button-ghost" href="/bank">Your donors</a>
+      {% elif user and user.consent_at and user.role == "counselor" %}
+      <a class="button button-ghost" href="/counselor">Your visits</a>
       {% elif user %}
       <a class="button button-ghost" href="/account">Account</a>
       {% else %}
@@ -77,6 +79,10 @@
       <a class="door" href="/login?role=bank">
         <h2>Sperm bank</h2>
         <p>Keep a per-donor survey, or confirm fields parsed from a public catalog page.</p>
+      </a>
+      <a class="door" href="/login?role=counselor">
+        <h2>Genetic counselor</h2>
+        <p>Post open slots, open a couple’s shortlist, and run a cited AI report per candidate.</p>
       </a>
     </div>
   </section>

@@ -16,9 +16,15 @@
         <a href="/couple/survey/clinical">Clinical survey</a>
         <a href="/couple/survey/preferences">Preferences</a>
         <a href="/match">Matches</a>
+        <a href="/couple/shortlist">Shortlist</a>
+        <a href="/couple/book">Book</a>
+        <a href="/couple/appointments">Visits</a>
         {% elif user and user.consent_at and user.role == "bank" %}
         <a href="/bank">Donors</a>
         <a href="/bank/catalog">Catalog</a>
+        {% elif user and user.consent_at and user.role == "counselor" %}
+        <a href="/counselor">Visits</a>
+        <a href="/counselor/slots">Availability</a>
         {% endif %}
         {% if user %}
         <a href="/account">Account</a>

@@ -1,4 +1,4 @@
-"""HTTP routes for the couple and sperm-bank site."""
+"""HTTP routes for the couple, sperm-bank, and counselor site."""
 
 from __future__ import annotations
 
@@ -15,15 +15,18 @@ from starlette.formparsers import MultiPartException
 
 from app.constants import (
     ADULT_PHOTO_KEYS,
+    APPOINTMENT_BOOKED,
     BLOOD_TYPES,
     COMMON_CARRIERS,
     CMV_REQUIREMENT_LABELS,
     CMV_REQUIREMENTS,
     CMV_STATUS,
     CMV_STATUS_LABELS,
+    DEFAULT_SLOT_MINUTES,
     ID_RELEASE,
     ID_RELEASE_LABELS,
     MAX_MOTILITY_UPLOAD_BYTES,
+    MAX_SHORTLIST,
     MOTILITY_DISCLAIMER,
     PHOTO_KEYS,
     QUARANTINE,
@@ -37,7 +40,15 @@ from app.constants import (
     ZYGOSITY_LABELS,
 )
 from app.llm import explain
-from app.models import Carrier, ContactMessage, Donor, User
+from app.models import (
+    Appointment,
+    AvailabilitySlot,
+    Carrier,
+    ContactMessage,
+    CounselorProfile,
+    Donor,
+    User,
+)
 from app.motility_client import analyze_donor_video
 from app.scrape import CatalogDonor, fetch_catalog_html, parse_catalog
 from app.security import hash_password, verify_password
@@ -45,19 +56,36 @@ from app.seed import (
     DEMO_BANK_EMAIL,
     DEMO_BANK_PASSWORD,
     DEMO_BLURBS,
+    DEMO_COUNSELOR_EMAIL,
+    DEMO_COUNSELOR_PASSWORD,
     DEMO_COUPLE_EMAIL,
     DEMO_COUPLE_PASSWORD,
 )
 from app.services import (
+    add_to_shortlist,
+    appointment_donor_ids,
+    book_appointment,
+    cancel_appointment,
+    counselor_display_name,
+    counselors_with_open_slots,
     delete_account,
     find_ranked_donor,
+    get_or_create_counselor_profile,
     get_or_create_history,
     get_or_create_profile,
     get_or_create_survey,
+    home_path_for,
+    latest_candidate_report,
     latest_explanation,
     list_carriers,
+    list_shortlist,
     packet_for,
     ranked_matches,
+    remove_from_shortlist,
+    run_candidate_report,
+    score_donor_for_couple,
+    shortlist_donor_ids,
+    slot_is_open,
     store_explanation,
 )
 
@@ -98,7 +126,10 @@ def _render(
         "demo_couple_password": DEMO_COUPLE_PASSWORD,
         "demo_bank_email": DEMO_BANK_EMAIL,
         "demo_bank_password": DEMO_BANK_PASSWORD,
+        "demo_counselor_email": DEMO_COUNSELOR_EMAIL,
+        "demo_counselor_password": DEMO_COUNSELOR_PASSWORD,
         "contact_email": request.app.state.settings.contact_email,
+        "max_shortlist": MAX_SHORTLIST,
         **extra,
     }
     return TEMPLATES.TemplateResponse(request, name, context, status_code=status_code)
@@ -145,7 +176,7 @@ def _require_user(request: Request) -> User:
 def _require_consent(request: Request, role: str) -> User:
     user = _require_user(request)
     if user.role != role:
-        raise _RedirectNeeded("/bank" if user.role == "bank" else "/couple/history")
+        raise _RedirectNeeded(home_path_for(user))
     if user.consent_at is None:
         raise _RedirectNeeded("/consent")
     return user
@@ -326,19 +357,20 @@ async def login_submit(request: Request):
     request.session["user_id"] = user.id
     if user.consent_at is None:
         return _redirect("/consent")
-    return _redirect("/bank" if user.role == "bank" else "/couple/history")
+    return _redirect(home_path_for(user))
 
 
 @router.post("/register")
 async def register_submit(request: Request):
-    """Create one couple login or one enterprise bank login."""
+    """Create a couple, sperm-bank, or counselor login."""
     form = await _form(request)
     email = str(form.get("email", "")).strip().lower()
     password = str(form.get("password", ""))
     role = str(form.get("role", ""))
+    display_name = str(form.get("display_name", "")).strip()[:120]
     error = ""
     if role not in ROLES:
-        error = "Choose couple or sperm bank."
+        error = "Choose couple, sperm bank, or genetic counselor."
     elif "@" not in email or len(email) > 255:
         error = "Enter an email address."
     elif len(password) < 8:
@@ -350,10 +382,19 @@ async def register_submit(request: Request):
         return _render(
             request, "login.html", None, status_code=400, role=shown_role, error=error
         )
+    db = _db(request)
     user = User(email=email, password_hash=hash_password(password), role=role)
-    _db(request).add(user)
-    _db(request).commit()
-    _db(request).refresh(user)
+    db.add(user)
+    db.flush()
+    if role == "counselor":
+        db.add(
+            CounselorProfile(
+                user_id=user.id,
+                display_name=display_name or email.split("@", 1)[0],
+            )
+        )
+    db.commit()
+    db.refresh(user)
     request.session["user_id"] = user.id
     return _redirect("/consent")
 
@@ -394,7 +435,7 @@ async def consent_submit(request: Request):
         )
     user.consent_at = datetime.now(timezone.utc)
     _db(request).commit()
-    return _redirect("/bank" if user.role == "bank" else "/couple/history")
+    return _redirect(home_path_for(user))
 
 
 @router.get("/account")
@@ -674,7 +715,15 @@ def match_list(request: Request):
     db = _db(request)
     survey = get_or_create_survey(db, user.id)
     rows = ranked_matches(db, user, request.app.state.settings)
-    return _render(request, "match_list.html", user, rows=rows, survey=survey)
+    return _render(
+        request,
+        "match_list.html",
+        user,
+        rows=rows,
+        survey=survey,
+        shortlisted_ids=shortlist_donor_ids(db, user.id),
+        shortlist_count=len(list_shortlist(db, user.id)),
+    )
 
 
 @router.get("/match/{donor_id}")
@@ -1106,3 +1155,498 @@ def _donor_from_draft(
         catalog_source_url=source if source != "bundled-sample" else "",
         catalog_confirmed=True,
     )
+
+
+def _parse_slot_start(raw: str) -> datetime:
+    """Parse an HTML datetime-local value as UTC."""
+    text = raw.strip()
+    if not text:
+        raise ValueError("Choose a start time.")
+    if text.endswith("Z"):
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    else:
+        parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _appointment_or_404(db: Session, appointment_id: int) -> Appointment:
+    appointment = db.get(Appointment, appointment_id)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    return appointment
+
+
+def _visit_candidates(
+    request: Request, appointment: Appointment
+) -> list[tuple[Donor, object, list]]:
+    """Live donor rows, match results, and stored reports for a visit."""
+    db = _db(request)
+    couple = db.get(User, appointment.couple_user_id)
+    if couple is None:
+        return []
+    settings = request.app.state.settings
+    rows: list[tuple[Donor, object, list]] = []
+    for donor_id in appointment_donor_ids(db, appointment.id):
+        donor = db.get(Donor, donor_id)
+        if donor is None:
+            continue
+        result = score_donor_for_couple(db, couple, donor, settings)
+        sentences = latest_candidate_report(db, appointment.id, donor.id)
+        rows.append((donor, result, sentences))
+    return rows
+
+
+@router.post("/couple/shortlist/{donor_id}/add")
+async def shortlist_add(request: Request, donor_id: int):
+    """Add a confirmed donor to the couple shortlist."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    error = add_to_shortlist(db, user.id, donor_id)
+    if error:
+        _flash(request, error)
+    else:
+        db.commit()
+        _flash(request, "Added to shortlist.")
+    return _redirect("/match")
+
+
+@router.post("/couple/shortlist/{donor_id}/remove")
+async def shortlist_remove(request: Request, donor_id: int):
+    """Remove a donor from the couple shortlist."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    remove_from_shortlist(db, user.id, donor_id)
+    db.commit()
+    _flash(request, "Removed from shortlist.")
+    referer = request.headers.get("referer", "")
+    if "/couple/shortlist" in referer:
+        return _redirect("/couple/shortlist")
+    return _redirect("/match")
+
+
+@router.get("/couple/shortlist")
+def shortlist_page(request: Request):
+    """Show the couple's shortlisted candidates."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    settings = request.app.state.settings
+    rows = []
+    for item in list_shortlist(db, user.id):
+        donor = db.get(Donor, item.donor_id)
+        if donor is None:
+            continue
+        result = score_donor_for_couple(db, user, donor, settings)
+        carriers = list_carriers(db, "donor", donor.id)
+        rows.append((donor, result, carriers))
+    return _render(
+        request,
+        "shortlist.html",
+        user,
+        rows=rows,
+        shortlist_count=len(rows),
+    )
+
+
+@router.get("/couple/book")
+def book_form(request: Request):
+    """List every counselor with open future slots."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    shortlist_count = len(list_shortlist(db, user.id))
+    groups = []
+    for counselor, profile, slots in counselors_with_open_slots(db):
+        groups.append(
+            {
+                "counselor": counselor,
+                "display_name": profile.display_name.strip() or counselor.email,
+                "slots": slots,
+            }
+        )
+    return _render(
+        request,
+        "book.html",
+        user,
+        groups=groups,
+        shortlist_count=shortlist_count,
+    )
+
+
+@router.post("/couple/book")
+async def book_submit(request: Request):
+    """Book an open counselor slot with the current shortlist."""
+    form = await _form(request)
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    try:
+        slot_id = int(str(form.get("slot_id", "")))
+    except ValueError:
+        _flash(request, "Choose an open slot.")
+        return _redirect("/couple/book")
+    slot = db.get(AvailabilitySlot, slot_id)
+    if slot is None:
+        _flash(request, "That slot is no longer available.")
+        return _redirect("/couple/book")
+    result = book_appointment(db, user, slot)
+    if isinstance(result, str):
+        _flash(request, result)
+        return _redirect("/couple/book")
+    db.commit()
+    _flash(request, "Visit booked. The counselor can open your shortlist.")
+    return _redirect(f"/couple/appointments/{result.id}")
+
+
+@router.get("/couple/appointments")
+def couple_appointments(request: Request):
+    """List the couple's booked visits."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointments = list(
+        db.scalars(
+            select(Appointment)
+            .where(Appointment.couple_user_id == user.id)
+            .order_by(Appointment.id.desc())
+        )
+    )
+    rows = []
+    for appointment in appointments:
+        slot = db.get(AvailabilitySlot, appointment.slot_id)
+        counselor = db.get(User, appointment.counselor_user_id)
+        rows.append(
+            {
+                "appointment": appointment,
+                "slot": slot,
+                "counselor_name": (
+                    counselor_display_name(db, counselor) if counselor else "Counselor"
+                ),
+                "donor_count": len(appointment_donor_ids(db, appointment.id)),
+            }
+        )
+    return _render(request, "couple_appointments.html", user, rows=rows)
+
+
+@router.get("/couple/appointments/{appointment_id}")
+def couple_appointment_detail(request: Request, appointment_id: int):
+    """Show one booked visit and any counselor reports already run."""
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointment = _appointment_or_404(db, appointment_id)
+    if appointment.couple_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    slot = db.get(AvailabilitySlot, appointment.slot_id)
+    counselor = db.get(User, appointment.counselor_user_id)
+    candidates = _visit_candidates(request, appointment)
+    return _render(
+        request,
+        "couple_appointment_detail.html",
+        user,
+        appointment=appointment,
+        slot=slot,
+        counselor_name=(
+            counselor_display_name(db, counselor) if counselor else "Counselor"
+        ),
+        candidates=candidates,
+    )
+
+
+@router.post("/couple/appointments/{appointment_id}/cancel")
+async def couple_cancel_appointment(request: Request, appointment_id: int):
+    """Cancel a couple's booked visit and free the slot."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "couple")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointment = _appointment_or_404(db, appointment_id)
+    if appointment.couple_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    error = cancel_appointment(db, appointment)
+    if error:
+        _flash(request, error)
+    else:
+        db.commit()
+        _flash(request, "Visit cancelled. The slot is open again.")
+    return _redirect(f"/couple/appointments/{appointment.id}")
+
+
+@router.get("/counselor")
+def counselor_home(request: Request):
+    """Upcoming booked visits for the signed-in counselor."""
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointments = list(
+        db.scalars(
+            select(Appointment)
+            .where(Appointment.counselor_user_id == user.id)
+            .order_by(Appointment.id.desc())
+        )
+    )
+    rows = []
+    for appointment in appointments:
+        slot = db.get(AvailabilitySlot, appointment.slot_id)
+        couple = db.get(User, appointment.couple_user_id)
+        rows.append(
+            {
+                "appointment": appointment,
+                "slot": slot,
+                "couple_email": couple.email if couple else "",
+                "donor_count": len(appointment_donor_ids(db, appointment.id)),
+            }
+        )
+    return _render(request, "counselor_home.html", user, rows=rows)
+
+
+@router.get("/counselor/slots")
+def counselor_slots(request: Request):
+    """List and manage the counselor's availability."""
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    profile = get_or_create_counselor_profile(db, user.id)
+    slots = list(
+        db.scalars(
+            select(AvailabilitySlot)
+            .where(AvailabilitySlot.counselor_user_id == user.id)
+            .order_by(AvailabilitySlot.starts_at, AvailabilitySlot.id)
+        )
+    )
+    taken = {
+        row.slot_id
+        for row in db.scalars(
+            select(Appointment).where(
+                Appointment.counselor_user_id == user.id,
+                Appointment.status == APPOINTMENT_BOOKED,
+            )
+        )
+    }
+    rows = [
+        {"slot": slot, "open": slot.id not in taken and slot_is_open(db, slot)}
+        for slot in slots
+    ]
+    return _render(
+        request,
+        "counselor_slots.html",
+        user,
+        rows=rows,
+        profile=profile,
+        default_minutes=DEFAULT_SLOT_MINUTES,
+    )
+
+
+@router.post("/counselor/slots")
+async def counselor_slot_create(request: Request):
+    """Add a future open slot."""
+    form = await _form(request)
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    try:
+        starts_at = _parse_slot_start(str(form.get("starts_at", "")))
+        duration = _bounded_int(
+            str(form.get("duration_minutes", str(DEFAULT_SLOT_MINUTES))),
+            "Duration",
+            15,
+            180,
+        )
+        if starts_at < datetime.now(timezone.utc):
+            raise ValueError("Choose a future start time.")
+    except ValueError as exc:
+        _flash(request, str(exc))
+        return _redirect("/counselor/slots")
+    db.add(
+        AvailabilitySlot(
+            counselor_user_id=user.id,
+            starts_at=starts_at.replace(tzinfo=None),
+            duration_minutes=duration,
+        )
+    )
+    db.commit()
+    _flash(request, "Slot added.")
+    return _redirect("/counselor/slots")
+
+
+@router.post("/counselor/slots/{slot_id}/delete")
+async def counselor_slot_delete(request: Request, slot_id: int):
+    """Remove an open slot the counselor owns."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    slot = db.get(AvailabilitySlot, slot_id)
+    if slot is None or slot.counselor_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Slot not found.")
+    booked = db.scalars(
+        select(Appointment.id).where(
+            Appointment.slot_id == slot.id,
+            Appointment.status == APPOINTMENT_BOOKED,
+        )
+    ).first()
+    if booked is not None:
+        _flash(request, "That slot already has a booked visit.")
+        return _redirect("/counselor/slots")
+    db.delete(slot)
+    db.commit()
+    _flash(request, "Slot removed.")
+    return _redirect("/counselor/slots")
+
+
+@router.post("/counselor/profile")
+async def counselor_profile_save(request: Request):
+    """Save the counselor display name used on the book page."""
+    form = await _form(request)
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    profile = get_or_create_counselor_profile(db, user.id)
+    profile.display_name = str(form.get("display_name", "")).strip()[:120]
+    db.commit()
+    _flash(request, "Display name saved.")
+    return _redirect("/counselor/slots")
+
+
+@router.get("/counselor/appointments/{appointment_id}")
+def counselor_appointment_detail(request: Request, appointment_id: int):
+    """Session page: live candidate profiles and counselor reports."""
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointment = _appointment_or_404(db, appointment_id)
+    if appointment.counselor_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    slot = db.get(AvailabilitySlot, appointment.slot_id)
+    couple = db.get(User, appointment.couple_user_id)
+    candidates = []
+    for donor, result, sentences in _visit_candidates(request, appointment):
+        candidates.append(
+            {
+                "donor": donor,
+                "result": result,
+                "sentences": sentences,
+                "carriers": list_carriers(db, "donor", donor.id),
+                "couple_carriers": list_carriers(
+                    db, "couple", appointment.couple_user_id
+                ),
+            }
+        )
+    return _render(
+        request,
+        "counselor_appointment.html",
+        user,
+        appointment=appointment,
+        slot=slot,
+        couple_email=couple.email if couple else "",
+        candidates=candidates,
+    )
+
+
+@router.post("/counselor/appointments/{appointment_id}/cancel")
+async def counselor_cancel_appointment(request: Request, appointment_id: int):
+    """Cancel a counselor's booked visit and free the slot."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointment = _appointment_or_404(db, appointment_id)
+    if appointment.counselor_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    error = cancel_appointment(db, appointment)
+    if error:
+        _flash(request, error)
+    else:
+        db.commit()
+        _flash(request, "Visit cancelled. The slot is open again.")
+    return _redirect(f"/counselor/appointments/{appointment.id}")
+
+
+@router.post("/counselor/appointments/{appointment_id}/report")
+async def counselor_report_all(request: Request, appointment_id: int):
+    """Run the AI tool for every candidate on the visit."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointment = _appointment_or_404(db, appointment_id)
+    if appointment.counselor_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    if appointment.status != APPOINTMENT_BOOKED:
+        _flash(request, "Cancelled visits cannot generate new reports.")
+        return _redirect(f"/counselor/appointments/{appointment.id}")
+    settings = request.app.state.settings
+    count = 0
+    for donor_id in appointment_donor_ids(db, appointment.id):
+        donor = db.get(Donor, donor_id)
+        if donor is None:
+            continue
+        run_candidate_report(db, appointment, donor, settings)
+        count += 1
+    db.commit()
+    _flash(request, f"Generated {count} candidate report(s).")
+    return _redirect(f"/counselor/appointments/{appointment.id}")
+
+
+@router.post("/counselor/appointments/{appointment_id}/donors/{donor_id}/report")
+async def counselor_report_one(request: Request, appointment_id: int, donor_id: int):
+    """Run the AI tool for one visit candidate."""
+    await _form(request)
+    try:
+        user = _require_consent(request, "counselor")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    appointment = _appointment_or_404(db, appointment_id)
+    if appointment.counselor_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+    if donor_id not in appointment_donor_ids(db, appointment.id):
+        raise HTTPException(status_code=404, detail="Donor not on this visit.")
+    if appointment.status != APPOINTMENT_BOOKED:
+        _flash(request, "Cancelled visits cannot generate new reports.")
+        return _redirect(f"/counselor/appointments/{appointment.id}")
+    donor = db.get(Donor, donor_id)
+    if donor is None:
+        raise HTTPException(status_code=404, detail="Donor not found.")
+    run_candidate_report(db, appointment, donor, request.app.state.settings)
+    db.commit()
+    _flash(request, f"Report updated for {donor.code}.")
+    return _redirect(f"/counselor/appointments/{appointment.id}")

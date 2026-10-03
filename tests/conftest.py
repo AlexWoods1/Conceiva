@@ -44,10 +44,30 @@ def _json_render(request, name, user, status_code=200, **extra):
         "user_role": None if user is None else user.role,
     }
     if "rows" in extra:
-        payload["rows"] = [
-            {"code": donor.code, "score": result.score, "hard_stop": result.hard_stop}
-            for donor, result in extra["rows"]
-        ]
+        if name == "match_list.html":
+            payload["rows"] = [
+                {
+                    "code": donor.code,
+                    "score": result.score,
+                    "hard_stop": result.hard_stop,
+                }
+                for donor, result in extra["rows"]
+            ]
+        elif name == "shortlist.html":
+            payload["rows"] = [
+                {
+                    "code": donor.code,
+                    "score": result.score,
+                    "hard_stop": result.hard_stop,
+                }
+                for donor, result, _carriers in extra["rows"]
+            ]
+        elif name == "counselor_slots.html":
+            payload["slot_open"] = [row["open"] for row in extra["rows"]]
+        elif name in {"couple_appointments.html", "counselor_home.html"}:
+            payload["appointment_ids"] = [
+                row["appointment"].id for row in extra["rows"]
+            ]
     if (
         extra.get("donor") is not None
         and getattr(extra["donor"], "code", None) is not None
@@ -63,9 +83,35 @@ def _json_render(request, name, user, status_code=200, **extra):
         payload["donor_codes"] = [donor.code for donor in extra["donors"]]
     if "carriers" in extra:
         payload["genes"] = [row.gene for row in extra["carriers"]]
+    if "shortlisted_ids" in extra:
+        payload["shortlisted_ids"] = sorted(extra["shortlisted_ids"])
+    if "shortlist_count" in extra:
+        payload["shortlist_count"] = extra["shortlist_count"]
+    if "groups" in extra:
+        payload["counselor_emails"] = [
+            group["counselor"].email for group in extra["groups"]
+        ]
+        payload["slot_ids"] = [
+            slot.id for group in extra["groups"] for slot in group["slots"]
+        ]
+    if "candidates" in extra:
+        # * Couple appointment detail uses tuples; counselor session uses dicts.
+        codes = []
+        for item in extra["candidates"]:
+            if isinstance(item, dict):
+                codes.append(item["donor"].code)
+            else:
+                codes.append(item[0].code)
+        payload["candidate_codes"] = codes
+        payload["report_texts"] = []
+        for item in extra["candidates"]:
+            sentences = item["sentences"] if isinstance(item, dict) else item[2]
+            payload["report_texts"].append([s.text for s in sentences])
     if "profile" in extra and extra["profile"] is not None:
-        payload["blood_type"] = extra["profile"].blood_type
-        payload["adult_photo_key"] = extra["profile"].adult_photo_key
+        payload["blood_type"] = getattr(extra["profile"], "blood_type", None)
+        payload["adult_photo_key"] = getattr(extra["profile"], "adult_photo_key", None)
+        if hasattr(extra["profile"], "display_name"):
+            payload["display_name"] = extra["profile"].display_name
     return JSONResponse(payload, status_code=status_code)
 
 

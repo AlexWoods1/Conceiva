@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Counselor{% endblock %}
+{% block body %}
+<section class="visit-page">
+  <header class="visit-page-head">
+    <h1>Your visits</h1>
+    <p class="help">
+      Couples book from your open slots.
+      <a href="/counselor/slots">Manage availability</a>
+    </p>
+  </header>
+  {% if not rows %}
+  <p class="empty-state">No visits yet. Post open slots so couples can book.</p>
+  {% else %}
+  <div class="visit-list">
+    {% for row in rows %}
+    <a class="visit-item" href="/counselor/appointments/{{ row.appointment.id }}">
+      <div class="visit-item-main">
+        <p class="visit-item-kicker">Couple</p>
+        <h2>{{ row.couple_email }}</h2>
+        {% if row.slot %}
+        <p class="visit-item-when">
+          {{ row.slot.starts_at.strftime("%a %d %b %Y") }}
+          · {{ row.slot.starts_at.strftime("%H:%M") }} UTC
+          · {{ row.slot.duration_minutes }} min
+        </p>
+        {% endif %}
+        <p class="visit-item-meta">
+          {{ row.donor_count }} candidate{{ "s" if row.donor_count != 1 else "" }}
+        </p>
+      </div>
+      <span class="status-pill status-{{ row.appointment.status }}">{{ row.appointment.status }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
