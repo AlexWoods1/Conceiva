@@ -70,3 +70,16 @@ def test_analyze_donor_video_returns_none_on_a_server_error():
         )
 
     assert result is None
+
+
+def test_demo_motility_result_picks_sample_by_filename():
+    from app.motility_client import demo_motility_result
+
+    ok = demo_motility_result("clip.mp4")
+    assert ok["annotated_video_url"] == "/static/motility/demo-tracked.mp4"
+    assert ok["summary"]["total_motility_percent"] > 40
+    assert ok["demo_fallback"] is True
+
+    low = demo_motility_result("clip_low.mp4")
+    assert low["annotated_video_url"] == "/static/motility/demo-low-tracked.mp4"
+    assert low["summary"]["total_motility_percent"] < 42

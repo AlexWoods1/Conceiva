@@ -1,20 +1,53 @@
 """Client for the separately-deployed motility analyzer service.
 
 That service carries torch/ultralytics/opencv and takes 1-2 minutes per
-video, so it cannot run inside this app's Vercel serverless deployment. This
-module just makes the HTTP call and degrades gracefully when the service is
-unreachable, same pattern as app/llm.py's explain().
+video, so it cannot run inside this app's Vercel serverless deployment.
+This module makes the HTTP call when a long-lived service is available,
+and falls back to precomputed sample clips for local/hackathon demos.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 import httpx
 
-from app.config import Settings
+from app.config import PROJECT_ROOT, Settings
 
 logger = logging.getLogger(__name__)
+
+_DEMO_OK = PROJECT_ROOT / "samples" / "demo" / "summary.json"
+_DEMO_LOW = PROJECT_ROOT / "samples" / "demo_low_motility" / "summary.json"
+_STATIC_OK = "/static/motility/demo-tracked.mp4"
+_STATIC_LOW = "/static/motility/demo-low-tracked.mp4"
+
+
+def demo_motility_result(filename: str = "") -> dict:
+    """Build a service-shaped payload from a precomputed sample clip.
+
+    Args:
+        filename: Upload name. Names containing ``low`` use the low-motility sample.
+
+    Returns:
+        Dict matching the motility service ``/analyze`` response, with an
+        absolute-ready annotated video path under ``/static/motility/``.
+    """
+    use_low = "low" in Path(filename or "").stem.lower()
+    summary_path = _DEMO_LOW if use_low else _DEMO_OK
+    video_url = _STATIC_LOW if use_low else _STATIC_OK
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    return {
+        "summary": payload["summary"],
+        "annotated_video_url": video_url,
+        "who_reference": payload["who_reference"],
+        "disclaimer": payload.get(
+            "disclaimer",
+            "Research and education demo only.",
+        ),
+        "demo_fallback": True,
+    }
 
 
 def analyze_donor_video(

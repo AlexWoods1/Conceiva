@@ -56,7 +56,7 @@ from app.models import (
     Donor,
     User,
 )
-from app.motility_client import analyze_donor_video
+from app.motility_client import analyze_donor_video, demo_motility_result
 from app.scrape import CatalogDonor, fetch_catalog_html, parse_catalog
 from app.security import hash_password, verify_password
 from app.seed import (
@@ -992,13 +992,22 @@ async def donor_motility_upload(request: Request, donor_id: int):
             request, user, donor, error="Choose a video file.", status_code=400
         )
     video_bytes = await video.read()
-    # analyze_donor_video() blocks on a synchronous HTTP call for 1-2 minutes
-    # while the video is processed. Called directly, that freezes this
-    # single-threaded event loop -- every other request, for every user,
-    # stalls until it returns. run_in_threadpool moves it off the loop.
-    result = await run_in_threadpool(
-        analyze_donor_video, video_bytes, video.filename, settings
-    )
+    used_demo = False
+    if settings.on_vercel:
+        # * Serverless cannot wait on the ML service; use the sample clip path.
+        result = demo_motility_result(video.filename)
+        used_demo = True
+    else:
+        # analyze_donor_video() blocks on a synchronous HTTP call for 1-2 minutes
+        # while the video is processed. Called directly, that freezes this
+        # single-threaded event loop -- every other request, for every user,
+        # stalls until it returns. run_in_threadpool moves it off the loop.
+        result = await run_in_threadpool(
+            analyze_donor_video, video_bytes, video.filename, settings
+        )
+        if result is None and settings.motility_demo_fallback:
+            result = demo_motility_result(video.filename)
+            used_demo = True
     if result is None:
         return _donor_page(
             request,
@@ -1009,9 +1018,9 @@ async def donor_motility_upload(request: Request, donor_id: int):
         )
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
-    # * Service returns a path on its own host; store an absolute URL for playback.
+    # * Service returns a path on its own host; demo uses /static/... on this app.
     video_url = str(result.get("annotated_video_url") or "")
-    if video_url.startswith("/"):
+    if video_url.startswith("/") and not video_url.startswith("/static/"):
         video_url = f"{settings.motility_service_url}{video_url}"
     donor.motility_video_url = video_url
     donor.motility_below_reference = (
@@ -1019,7 +1028,13 @@ async def donor_motility_upload(request: Request, donor_id: int):
         or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
     )
     db.commit()
-    if donor.motility_below_reference:
+    if used_demo:
+        _flash(
+            request,
+            "Demo motility result saved (precomputed sample). "
+            "Run the motility service locally for a live analysis.",
+        )
+    elif donor.motility_below_reference:
         _flash(request, "Motility result saved. Below WHO reference limits.")
     else:
         _flash(request, "Motility result saved.")

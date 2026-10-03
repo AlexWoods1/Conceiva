@@ -36,8 +36,9 @@ Set these in the Vercel project environment:
 | `SESSION_SECRET` | **Yes** | Non-default value. App refuses to start without it. |
 | `SEED_ON_EMPTY` | Optional | Default `true`. Demo accounts upsert if missing. |
 | `STRIPE_*` | Leave unset | Matches stay free for the demo. |
-| `MOTILITY_UPLOADS_ENABLED` | Leave unset | Defaults off on Vercel (analyze cannot fit in 60s). |
-| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | Local only | Motility service is a separate long-lived process. |
+| `MOTILITY_UPLOADS_ENABLED` | Optional | Default `true`. Upload form stays available. |
+| `MOTILITY_DEMO_FALLBACK` | Optional | Default `true`. Vercel uses precomputed sample clips. |
+| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | Local only | Live ML service on a long-lived host. |
 
 SQLite on Vercel lives under `/tmp`. Data can reset when instances recycle. Demo logins are shared across judges.
 
@@ -57,4 +58,9 @@ uv run --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ## Motility (local / long-lived host)
 
-Bank video analyze needs the separate motility service (`backend/`) and is not supported on the Vercel function. Run both locally when you need that demo path.
+Bank video upload stays available everywhere. On Vercel (and whenever the ML
+service is down), the app applies a precomputed sample clip under
+`/static/motility/` so the Motility test UI still completes. For a live YOLO
+analysis, run the separate motility service (`backend/`) locally and point
+`MOTILITY_SERVICE_URL` at it; filenames containing `low` map to the
+low-motility sample when falling back.

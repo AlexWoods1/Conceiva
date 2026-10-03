@@ -2,6 +2,8 @@
 
 from dataclasses import replace
 
+import pytest
+
 from app.models import Donor
 from tests.test_http import _consent
 
@@ -85,7 +87,55 @@ def test_motility_upload_disabled_returns_clear_error(api, monkeypatch):
     assert "disabled" in response.json()["error"].lower()
 
 
-def test_motility_upload_shows_an_error_when_the_service_is_down(api, monkeypatch):
+def test_motility_upload_falls_back_to_demo_when_service_is_down(api, monkeypatch):
+    _consent(api, "bank@example.com", role="bank")
+    donor_id = _create_donor(api)
+
+    monkeypatch.setattr(
+        "app.routes.analyze_donor_video", lambda video_bytes, filename, settings: None
+    )
+
+    response = api.client.post(
+        f"/bank/donors/{donor_id}/motility",
+        data={"csrf": api.csrf},
+        files={"video": ("sample.mp4", b"fake video bytes", "video/mp4")},
+    )
+    assert response.status_code == 303
+    db = api.session()
+    try:
+        donor = db.get(Donor, donor_id)
+        assert donor.motility_total_pct == pytest.approx(69.01408450704226)
+        assert donor.motility_video_url == "/static/motility/demo-tracked.mp4"
+        assert donor.motility_below_reference is False
+    finally:
+        db.close()
+
+
+def test_motility_upload_uses_low_demo_when_filename_contains_low(api, monkeypatch):
+    _consent(api, "bank@example.com", role="bank")
+    donor_id = _create_donor(api)
+    monkeypatch.setattr(
+        "app.routes.analyze_donor_video", lambda *_args, **_kwargs: None
+    )
+    response = api.client.post(
+        f"/bank/donors/{donor_id}/motility",
+        data={"csrf": api.csrf},
+        files={"video": ("clip_low.mp4", b"fake", "video/mp4")},
+    )
+    assert response.status_code == 303
+    db = api.session()
+    try:
+        donor = db.get(Donor, donor_id)
+        assert donor.motility_below_reference is True
+        assert donor.motility_video_url == "/static/motility/demo-low-tracked.mp4"
+    finally:
+        db.close()
+
+
+def test_motility_upload_shows_an_error_when_fallback_disabled(api, monkeypatch):
+    api.app.state.settings = replace(
+        api.app.state.settings, motility_demo_fallback=False
+    )
     _consent(api, "bank@example.com", role="bank")
     donor_id = _create_donor(api)
 

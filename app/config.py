@@ -42,6 +42,8 @@ class Settings:
     motility_service_url: str = "http://localhost:8010"
     motility_service_api_key: str = ""
     motility_uploads_enabled: bool = True
+    motility_demo_fallback: bool = True
+    on_vercel: bool = False
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_price_id: str = ""
@@ -79,11 +81,10 @@ def load_settings() -> Settings:
             "SESSION_SECRET must be set to a non-default value on Vercel."
         )
     contact_email = os.environ.get("CONTACT_EMAIL", "privacy@example.com").strip()
-    if "MOTILITY_UPLOADS_ENABLED" in os.environ:
-        motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "false")
-    else:
-        # * Vercel maxDuration cannot host the analyze round-trip.
-        motility_uploads_enabled = not on_vercel
+    # * Uploads stay on for the hackathon demo. Real ML is skipped on Vercel;
+    # * the route uses a precomputed sample clip instead (motility_demo_fallback).
+    motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "true")
+    motility_demo_fallback = _as_bool("MOTILITY_DEMO_FALLBACK", "true")
     return Settings(
         database_path=database_path,
         session_secret=session_secret,
@@ -101,6 +102,8 @@ def load_settings() -> Settings:
         ).rstrip("/"),
         motility_service_api_key=os.environ.get("MOTILITY_SERVICE_API_KEY", ""),
         motility_uploads_enabled=motility_uploads_enabled,
+        motility_demo_fallback=motility_demo_fallback,
+        on_vercel=on_vercel,
         stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", "").strip(),
         stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip(),
         stripe_price_id=os.environ.get("STRIPE_PRICE_ID", "").strip(),
