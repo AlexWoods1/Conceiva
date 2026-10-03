@@ -18,6 +18,19 @@ TRAIL_COLOR = (0, 215, 255)
 BOX_COLOR = (0, 255, 0)
 
 
+def _require_local_video_file(video_path):
+    """Rejects anything ultralytics would treat as a URL/stream instead of a
+    local file -- model.track(source=...) fetches http(s)/rtsp/rtmp sources
+    server-side, which is an SSRF vector if video_path ever traces back to
+    unvalidated input."""
+    path = Path(video_path)
+    if "://" in str(video_path) or not path.is_file():
+        raise ValueError(
+            f"video_path must be an existing local file, got: {video_path!r}"
+        )
+    return path
+
+
 def run_tracker(video_path, model):
     """Yields (frame_idx, track_id, class_id, x_center, y_center, orig_img) per detection."""
     for frame_idx, result in enumerate(
@@ -55,6 +68,7 @@ def track_video(video_path, out_csv, out_video, model=None):
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     out_video.parent.mkdir(parents=True, exist_ok=True)
 
+    video_path = _require_local_video_file(video_path)
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

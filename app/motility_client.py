@@ -40,9 +40,13 @@ def analyze_donor_video(
     http = client or httpx.Client(timeout=300.0)
     close_client = client is None
     try:
+        headers = {}
+        if settings.motility_service_api_key:
+            headers["X-Api-Key"] = settings.motility_service_api_key
         response = http.post(
             f"{settings.motility_service_url}/analyze",
             files={"video": (filename, video_bytes, "video/mp4")},
+            headers=headers,
         )
         response.raise_for_status()
         return response.json()

@@ -22,6 +22,7 @@ from app.constants import (
     CMV_STATUS_LABELS,
     ID_RELEASE,
     ID_RELEASE_LABELS,
+    MAX_MOTILITY_UPLOAD_BYTES,
     MOTILITY_DISCLAIMER,
     PHOTO_KEYS,
     QUARANTINE,
@@ -895,6 +896,9 @@ async def donor_carrier_add(request: Request, donor_id: int):
 @router.post("/bank/donors/{donor_id}/motility")
 async def donor_motility_upload(request: Request, donor_id: int):
     """Analyze an uploaded semen sample video and store the result."""
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_MOTILITY_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Video is too large.")
     form = await _form(request)
     try:
         user = _require_consent(request, "bank")
