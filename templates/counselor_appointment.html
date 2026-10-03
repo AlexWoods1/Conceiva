@@ -44,7 +44,11 @@
   <div class="rows">
     {% for item in candidates %}
     <article class="donor-row visit-candidate">
+      {% if item.donor.baby_photo_key %}
+      <img class="portrait portrait-baby" src="/static/photos/{{ item.donor.baby_photo_key }}.jpg" alt="Childhood photo of donor {{ item.donor.code }}" width="96" height="96" />
+      {% else %}
       <img class="portrait" src="/static/photos/{{ item.donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ item.donor.code }}" width="96" height="96" />
+      {% endif %}
       <div class="donor-copy">
         <div class="visit-candidate-head">
           <h2>{{ item.donor.code }}</h2>

@@ -99,6 +99,7 @@ class Donor(Base):
     rh: Mapped[str] = mapped_column(String(16), default="")
     ancestry: Mapped[str] = mapped_column(String(255), default="")
     photo_key: Mapped[str] = mapped_column(String(32), default="default")
+    baby_photo_key: Mapped[str] = mapped_column(String(32), default="")
     panel: Mapped[str] = mapped_column(String(128), default="")
     cmv: Mapped[str] = mapped_column(String(16), default="unknown")
     quarantine: Mapped[str] = mapped_column(String(32), default="cleared")
@@ -110,6 +111,20 @@ class Donor(Base):
     motility_progressive_pct: Mapped[float | None] = mapped_column(Float, default=None)
     motility_video_url: Mapped[str] = mapped_column(String(255), default="")
     motility_below_reference: Mapped[bool] = mapped_column(default=False)
+    hair_color: Mapped[str] = mapped_column(String(16), default="")
+    hair_type: Mapped[str] = mapped_column(String(16), default="")
+    eye_color: Mapped[str] = mapped_column(String(16), default="")
+    height_cm: Mapped[int | None] = mapped_column(Integer, default=None)
+    weight_kg: Mapped[int | None] = mapped_column(Integer, default=None)
+    ethnicity: Mapped[str] = mapped_column(String(64), default="")
+
+    @property
+    def bmi(self) -> float | None:
+        """Body mass index from height and weight, or None when either is missing."""
+        if not self.height_cm or not self.weight_kg:
+            return None
+        meters = self.height_cm / 100
+        return round(self.weight_kg / (meters * meters), 1)
 
 
 class Carrier(Base):

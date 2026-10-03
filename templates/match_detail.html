@@ -4,23 +4,41 @@
 <section class="match-page">
   <p class="match-back"><a href="/match">← Matches</a></p>
 
-  <header class="match-header">
-    <img
-      class="portrait"
-      src="/static/photos/{{ donor.photo_key }}.png"
-      alt="Open-source stand-in portrait for {{ donor.code }}"
-      width="96"
-      height="96"
-    />
+  <header class="match-header profile-hero">
+    <div class="profile-gallery">
+      {% if donor.baby_photo_key %}
+      <figure class="profile-photo profile-photo-main">
+        <img src="/static/photos/{{ donor.baby_photo_key }}.jpg" alt="Childhood photo of donor {{ donor.code }}" />
+        <figcaption>Donor as a child</figcaption>
+      </figure>
+      {% endif %}
+      <figure class="profile-photo{% if not donor.baby_photo_key %} profile-photo-main{% endif %}">
+        <img
+          class="portrait"
+          src="/static/photos/{{ donor.photo_key }}.png"
+          alt="Open-source stand-in portrait for {{ donor.code }}"
+        />
+        <figcaption>Stand-in portrait</figcaption>
+      </figure>
+    </div>
     <div class="match-header-copy">
-      <p class="match-kicker">Donor match</p>
-      <h1>{{ donor.code }}</h1>
+      <p class="match-kicker">Donor profile</p>
+      <h1 class="display">
+        {{ donor.code }}
+        {% if donor.blood_type %}<span class="blood-chip">{{ donor.blood_type }}{% if donor.rh == "negative" %}&minus;{% elif donor.rh == "positive" %}+{% endif %}</span>{% endif %}
+      </h1>
       {% if result.hard_stop %}
       <p class="match-status match-status-stop">Blocked · carrier conflict</p>
       {% else %}
       <p class="match-status">Medical rank {{ result.score }}</p>
       {% endif %}
-      <p class="caption">Synthetic stand-in. Not a donor, not a child, and not a prediction.</p>
+      {% set traits = trait_summary(donor) %}
+      {% if traits %}
+      <ul class="chip-row chip-row-light">
+        {% for phrase in traits %}<li>{{ phrase }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <p class="caption">Synthetic stand-ins. The baby photo shows the donor as a child. It is not a child prediction.</p>
     </div>
   </header>
 
@@ -35,6 +53,27 @@
     <li>{{ reason.text }}</li>
     {% endfor %}
   </ul>
+
+  <section class="traits-block">
+    <h2>Physical traits</h2>
+    <p class="help">As the bank recorded them. These do not change the medical rank.</p>
+    <dl class="trait-list">
+      <dt>Hair</dt>
+      <dd>{{ ((donor.hair_color ~ " " ~ donor.hair_type)|trim|capitalize) or "Not recorded" }}</dd>
+      <dt>Eyes</dt>
+      <dd>{{ donor.eye_color|capitalize if donor.eye_color else "Not recorded" }}</dd>
+      <dt>Height</dt>
+      <dd>{{ format_height(donor.height_cm) or "Not recorded" }}</dd>
+      <dt>Weight</dt>
+      <dd>{{ format_weight(donor.weight_kg) or "Not recorded" }}</dd>
+      <dt>BMI</dt>
+      <dd>{{ donor.bmi if donor.bmi is not none else "Not recorded" }}</dd>
+      <dt>Blood type</dt>
+      <dd>{{ donor.blood_type or "Not recorded" }}{% if donor.rh %} {{ rh_labels[donor.rh] }}{% endif %}</dd>
+      <dt>Ethnicity (donor-reported)</dt>
+      <dd>{{ donor.ethnicity or "Not recorded" }}</dd>
+    </dl>
+  </section>
 
   <section class="explain-block">
     <div class="explain-head">
