@@ -288,9 +288,11 @@ def explain(
             return local
         return _merge_hard_stops(checked, local)
     except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
-        logger.warning(
-            "LLM explanation failed (%s); using the record text.", type(exc).__name__
-        )
+        detail = type(exc).__name__
+        if isinstance(exc, httpx.HTTPStatusError):
+            body = (exc.response.text or "")[:300]
+            detail = f"{detail} {exc.response.status_code}: {body}"
+        logger.warning("LLM explanation failed (%s); using the record text.", detail)
         return local
     finally:
         if close_client:

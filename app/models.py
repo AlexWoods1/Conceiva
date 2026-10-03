@@ -75,7 +75,7 @@ class Donor(Base):
     blood_type: Mapped[str] = mapped_column(String(8), default="")
     rh: Mapped[str] = mapped_column(String(16), default="")
     ancestry: Mapped[str] = mapped_column(String(255), default="")
-    photo_key: Mapped[str] = mapped_column(String(32), default="geo-1")
+    photo_key: Mapped[str] = mapped_column(String(32), default="default")
     panel: Mapped[str] = mapped_column(String(128), default="")
     cmv: Mapped[str] = mapped_column(String(16), default="unknown")
     quarantine: Mapped[str] = mapped_column(String(32), default="cleared")

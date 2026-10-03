@@ -810,7 +810,7 @@ def donor_new(request: Request):
         blood_type="O",
         rh="negative",
         ancestry="",
-        photo_key="geo-1",
+        photo_key="default",
         panel="",
         cmv="unknown",
         quarantine="cleared",
