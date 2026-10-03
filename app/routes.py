@@ -1001,9 +1001,7 @@ async def donor_motility_upload(request: Request, donor_id: int):
             analyze_donor_video, video_bytes, video.filename, settings
         )
     except MotilityServiceError as exc:
-        return _donor_page(
-            request, user, donor, error=exc.message, status_code=503
-        )
+        return _donor_page(request, user, donor, error=exc.message, status_code=503)
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
     # * Service returns a path on its own host; store an absolute URL for playback.
