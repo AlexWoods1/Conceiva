@@ -1,6 +1,6 @@
-# SpermMatch — Executive Summary
+# Conceiva — Executive Summary
 
-**Product:** SpermMatch  
+**Product:** Conceiva  
 **Audience:** Couples choosing a sperm donor who want a genetic counselor in the decision — couples with genetic concerns, same-sex couples, and couples facing infertility  
 **Scope:** An intermediary that lines up donor matches and extended carrier-screening context for a counseling session. Decision support on records the users supply — not a diagnosis, a lab test, or a substitute for a genetic counselor
 
@@ -14,9 +14,9 @@ Couples, genetic counselors, and sperm banks sit in separate systems. Banks hold
 
 Give couples one place to hold potential sperm-donor matches, connect with a genetic counselor who already sees that shortlist, and receive a plain-language summary of complications from extended carrier screening. Faster access to a counselor, and a better-prepared session.
 
-## What separates SpermMatch
+## What separates Conceiva
 
-SpermMatch is the intermediary between couples and genetic counselors, and between genetic counselors and sperm banks.
+Conceiva is the intermediary between couples and genetic counselors, and between genetic counselors and sperm banks.
 
 - **Shortlist, then counsel:** Couples review potential donors with carrier results in view, then set up a call with a genetic counselor who has those matches in mind.
 - **AI tool for genetic counselors:** Summarizes potential complications from extended carrier screening so the counselor opens the session briefed on conflicts and gaps.

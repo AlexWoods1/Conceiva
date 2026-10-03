@@ -1,4 +1,4 @@
-"""Run the motility FastAPI service for local SpermMatch uploads.
+"""Run the motility FastAPI service for local Conceiva uploads.
 
 Usage (from repo root):
 

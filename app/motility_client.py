@@ -2,7 +2,7 @@
 
 That service carries torch/ultralytics/opencv and takes 1-2 minutes per
 video, so it cannot run inside this app's Vercel serverless deployment.
-SpermMatch calls POST /analyze over HTTP when ``MOTILITY_SERVICE_URL`` is set.
+Conceiva calls POST /analyze over HTTP when ``MOTILITY_SERVICE_URL`` is set.
 """
 
 from __future__ import annotations

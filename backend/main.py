@@ -1,8 +1,8 @@
 """Standalone FastAPI service wrapping the motility pipeline.
 
-Runs separately from the SpermMatch app (which deploys to Vercel serverless
+Runs separately from the Conceiva app (which deploys to Vercel serverless
 and can't carry torch/ultralytics/opencv or afford a multi-minute request).
-SpermMatch calls POST /analyze over HTTP instead of importing this in-process.
+Conceiva calls POST /analyze over HTTP instead of importing this in-process.
 
 Start locally (from the repo root):
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 OUT_DIR = Path("out/requests")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Every caller (including SpermMatch's own backend) must send this header.
+# Every caller (including Conceiva's own backend) must send this header.
 # This service does real CPU/GPU work per request, so it fails CLOSED when
 # unconfigured -- an empty/missing key must never mean "let everyone in".
 # Local dev opts in explicitly instead of relying on an absent key.
@@ -48,7 +48,7 @@ MAX_UPLOAD_BYTES = (
     200 * 1024 * 1024
 )  # a 30s microscopy clip is a few MB; this is generous
 
-app = FastAPI(title="SpermMatch Motility Service")
+app = FastAPI(title="Conceiva Motility Service")
 app.mount("/videos", StaticFiles(directory=OUT_DIR), name="videos")
 
 
