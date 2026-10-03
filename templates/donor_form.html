@@ -94,6 +94,10 @@
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <label>Upload sample video <input type="file" name="video" accept="video/*" required /></label>
   <button type="submit">Analyze motility</button>
+  <p class="hint">
+    Takes 1-2 minutes on CPU. The page will stay on this screen until it's
+    done -- please don't close the tab or submit again.
+  </p>
 </form>
 <form method="post" action="/bank/donors/{{ donor.id }}/delete">
   <input type="hidden" name="csrf" value="{{ csrf }}" />

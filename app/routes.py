@@ -7,11 +7,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.formparsers import MultiPartException
+from starlette.requests import ClientDisconnect
 
 from app.constants import (
     ADULT_PHOTO_KEYS,
@@ -155,6 +157,11 @@ async def _form(request: Request, max_part_size: int | None = None):
         form = await request.form(**kwargs)
     except MultiPartException as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except ClientDisconnect as exc:
+        # The browser closed the connection mid-upload. No one is listening
+        # for a response; raising HTTPException here would just log a
+        # confusing 400 for a client that already left.
+        raise HTTPException(status_code=499, detail="Client disconnected.") from exc
     expected = request.session.get("csrf")
     if not expected or form.get("csrf") != expected:
         raise HTTPException(status_code=400, detail="CSRF check failed.")
@@ -980,8 +987,12 @@ async def donor_motility_upload(request: Request, donor_id: int):
             request, user, donor, error="Choose a video file.", status_code=400
         )
     video_bytes = await video.read()
-    result = analyze_donor_video(
-        video_bytes, video.filename, request.app.state.settings
+    # analyze_donor_video() blocks on a synchronous HTTP call for 1-2 minutes
+    # while the video is processed. Called directly, that freezes this
+    # single-threaded event loop -- every other request, for every user,
+    # stalls until it returns. run_in_threadpool moves it off the loop.
+    result = await run_in_threadpool(
+        analyze_donor_video, video_bytes, video.filename, request.app.state.settings
     )
     if result is None:
         return _donor_page(
@@ -993,7 +1004,13 @@ async def donor_motility_upload(request: Request, donor_id: int):
         )
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
-    donor.motility_video_url = result["annotated_video_url"]
+    # The service returns a path relative to itself (e.g. "/videos/<id>/...").
+    # This app renders it on its own origin, so the path alone 404s in the
+    # browser -- store the full URL against the service host we actually
+    # called, the one host that's guaranteed to serve it.
+    donor.motility_video_url = (
+        request.app.state.settings.motility_service_url + result["annotated_video_url"]
+    )
     donor.motility_below_reference = (
         donor.motility_total_pct < WHO_TOTAL_MOTILITY_MIN_PCT
         or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
