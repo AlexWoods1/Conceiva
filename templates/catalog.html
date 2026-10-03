@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Catalog{% endblock %}
+{% block body %}
+<h1>Public catalog</h1>
+<p>
+  Paste a public catalog URL, or load the bundled sample.
+  A person confirms parsed fields before they are saved.
+  Images on the page are ignored. Saved portraits are synthetic.
+</p>
+<form method="post" action="/bank/catalog/sample">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <button type="submit">Load sample catalog</button>
+</form>
+<form method="post" action="/bank/catalog/fetch" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <label>Catalog URL
+    <input name="url" type="url" placeholder="https://example.com/donors" />
+  </label>
+  <button type="submit">Fetch public page</button>
+</form>
+{% if drafts %}
+<h2>Confirm fields</h2>
+<form method="post" action="/bank/catalog/confirm" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  {% for draft in drafts %}
+  <label class="check-card">
+    <input type="checkbox" name="code" value="{{ draft.code }}" checked />
+    <span>
+      <strong>{{ draft.code }}</strong>
+      {{ draft.ancestry }} · {{ draft.blood_type }} {{ draft.rh }} · CMV {{ draft.cmv }} ·
+      {{ draft.panel }} · {{ draft.quarantine }} · family {{ draft.family_limit }} ·
+      {{ draft.id_release_policy }}
+    </span>
+  </label>
+  {% endfor %}
+  <button type="submit">Save confirmed donors</button>
+</form>
+{% endif %}
+{% endblock %}

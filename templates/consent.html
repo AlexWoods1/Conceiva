@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Consent{% endblock %}
+{% block body %}
+<article class="panel">
+  <h1>Consent</h1>
+  <p>Genetic fields and match scores stay behind this gate.</p>
+  <ul class="plain">
+    <li>This is decision support on the records you enter. It is not a diagnosis.</li>
+    <li>A shared recessive carrier is a hard stop and stays visible.</li>
+    <li>Portraits are open-source stand-ins. They are not donors, not children, and not a prediction.</li>
+    <li>Blood type means the intended parent's ABO and Rh. It does not score a donor.</li>
+    <li>Ancestry does not raise or lower the rank.</li>
+    <li>Closing the account deletes genotypes, surveys, portrait keys, and explanation logs.</li>
+    <li>The <a href="/privacy">privacy policy</a> lists what this demo stores.</li>
+  </ul>
+  <form method="post" action="/consent" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}" />
+    <label class="choice">
+      <input type="checkbox" name="agree" value="yes" required />
+      <span>I understand and agree.</span>
+    </label>
+    <button type="submit">Continue</button>
+  </form>
+</article>
+{% endblock %}

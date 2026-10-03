@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Sample start{% endblock %}
+{% block body %}
+<h1>Sample start</h1>
+<p>
+  The demo is already seeded. Follow these steps on this site.
+  Portraits are synthetic. A shared CFTR carrier blocks donor DN-240.
+</p>
+<p class="caption">
+  Local command: <code>uv run uvicorn app.main:app --host 127.0.0.1 --port 8000</code>.
+  On Vercel the database is temporary and can reset to this same seed.
+</p>
+
+<h2>Couple</h2>
+<ol class="steps">
+  <li>Open <a href="/login?role=couple">the couple door</a> and sign in as <code>{{ demo_couple_email }}</code> / <code>{{ demo_couple_password }}</code>.</li>
+  <li>Accept the consent gate. It sits in front of genetic fields and scores.</li>
+  <li>On History, save blood type O and Rh negative. That is the intended parent's type, not a child's. Also enter 1 prior pregnancy and 0 miscarriages. An Rh-negative parent plus an Rh-positive donor is a flag, not a block.</li>
+  <li>On Carriers, add gene <code>CFTR</code>, zygosity heterozygous, condition Cystic fibrosis.</li>
+  <li>On the clinical survey, enter ancestry <code>Finnish</code> and leave CMV as any. Notes stay out of the explanation.</li>
+  <li>On preferences, choose ID release open and family limit 2.</li>
+  <li>Open Matches. DN-100 stays a candidate. DN-240 shows a CFTR carrier conflict and is not a candidate. DN-520 is medically clear but loses rank on anonymous ID and a family limit of 1. DN-630 is Rh positive and has no panel on file.</li>
+  <li>Open DN-240 and choose Explain from the record. Each sentence expands to a field. An empty panel says it is not in the record.</li>
+</ol>
+
+<h2>Sperm bank</h2>
+<ol class="steps">
+  <li>Log out, then open <a href="/login?role=bank">the bank door</a> as <code>{{ demo_bank_email }}</code> / <code>{{ demo_bank_password }}</code>.</li>
+  <li>Accept consent, then open Catalog.</li>
+  <li>Load the sample catalog. Confirm CAT-1. The page image is ignored and the saved portrait is synthetic.</li>
+  <li>The inventory lists CAT-1 beside DN-100, DN-240, DN-310, DN-410, DN-520, and DN-630. Each seeded code has a short note on the match card.</li>
+</ol>
+<p><a class="button" href="/login?role=couple">Start as a couple</a></p>
+{% endblock %}

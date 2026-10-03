@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block body %}
+<h1>History</h1>
+<p>This page is the intended parent's record. It is not a prediction of a child's blood type.</p>
+<form method="post" action="/couple/history" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <div class="field">
+    <label for="blood_type">Your ABO blood type</label>
+    <select id="blood_type" name="blood_type" required>
+      {% for item in blood_types %}
+      <option value="{{ item }}" {% if profile.blood_type == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+    <p class="help">The ABO group of the parent who will carry the pregnancy, or the parent whose type you have on file. It is shown beside the donor's type. It does not change the rank.</p>
+  </div>
+  <div class="field">
+    <label for="rh">Your Rh status</label>
+    <select id="rh" name="rh" required>
+      {% for item in rh_values %}
+      <option value="{{ item }}" {% if profile.rh == item %}selected{% endif %}>{{ rh_labels[item] }}</option>
+      {% endfor %}
+    </select>
+    <p class="help">Rh negative here, with an Rh positive donor, raises an informational flag about pregnancy incompatibility. The flag is not a block and it is not a quality score.</p>
+  </div>
+  <div class="field">
+    <label for="prior_pregnancies">Prior pregnancies</label>
+    <input id="prior_pregnancies" name="prior_pregnancies" type="number" min="0" max="30" value="{{ history.prior_pregnancies }}" required />
+    <p class="help">Count of previous pregnancies for this parent. The number is stored for the explanation. It does not change the rank.</p>
+  </div>
+  <div class="field">
+    <label for="prior_donors">Prior donors</label>
+    <input id="prior_donors" name="prior_donors" value="{{ history.prior_donors }}" maxlength="500" />
+    <p class="help">Donor codes already used, if any. Email addresses and phone numbers are stripped before an explanation is written.</p>
+  </div>
+  <div class="field">
+    <label for="miscarriages">Miscarriages</label>
+    <input id="miscarriages" name="miscarriages" type="number" min="0" max="30" value="{{ history.miscarriages }}" required />
+    <p class="help">Count only. It is context on the explanation, not a penalty.</p>
+  </div>
+  <div class="field">
+    <label for="known_conditions">Known family conditions</label>
+    <textarea id="known_conditions" name="known_conditions" maxlength="500">{{ history.known_conditions }}</textarea>
+    <p class="help">Conditions already known in the family, in your own words. This is separate from the carrier form.</p>
+  </div>
+  {% if face_compare %}
+  <div class="field">
+    <label for="adult_photo_key">Synthetic adult reference</label>
+    <select id="adult_photo_key" name="adult_photo_key">
+      <option value="">None</option>
+      {% for item in adult_photos %}
+      <option value="{{ item }}" {% if profile.adult_photo_key == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+    <p class="help">Resemblance is a stub. It is not part of the medical rank.</p>
+  </div>
+  {% endif %}
+  <button type="submit">Save history</button>
+</form>
+{% endblock %}

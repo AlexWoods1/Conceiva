@@ -1,0 +1,58 @@
+<p class="help">
+  A carrier has one altered copy of a gene tied to a recessive condition.
+  The rank compares the gene code, such as CFTR, only when both the couple and the donor list that same code.
+  The condition name is what the report calls the disease. It is not compared by itself.
+</p>
+{% if carriers %}
+<ul class="records">
+  {% for row in carriers %}
+  <li>
+    <span>
+      <strong>{{ row.condition or "Condition not named" }}</strong>
+      <span class="meta">Gene code {{ row.gene }} · {{ zygosity_labels[row.zygosity] }}</span>
+    </span>
+    {% if delete_url %}
+    <form method="post" action="{{ delete_url }}{{ row.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}" />
+      <button type="submit" class="linkish">Remove</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No carrier results yet.</p>
+{% endif %}
+<form method="post" action="{{ post_url }}" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <div class="field">
+    <label for="example-{{ form_id }}">Condition on the report</label>
+    <select id="example-{{ form_id }}" name="example">
+      <option value="other">A different result. Type it below.</option>
+      {% for gene, condition in common_carriers %}
+      <option value="{{ gene }}">{{ condition }} (gene code {{ gene }})</option>
+      {% endfor %}
+    </select>
+    <p class="help">Pick a common recessive result, or choose “A different result” and type the names from the report. Example: cystic fibrosis uses gene code CFTR.</p>
+  </div>
+  <div class="field">
+    <label for="condition-{{ form_id }}">Condition name</label>
+    <input id="condition-{{ form_id }}" name="condition" maxlength="255" placeholder="Cystic fibrosis" />
+    <p class="help">The disease name on the report. Required when you choose “A different result.”</p>
+  </div>
+  <div class="field">
+    <label for="gene-{{ form_id }}">Gene code</label>
+    <input id="gene-{{ form_id }}" name="gene" maxlength="32" placeholder="CFTR" />
+    <p class="help">The short code next to that condition, not a description. CFTR is the code for cystic fibrosis. HBB is the code for sickle cell disease. This is the value the rank compares.</p>
+  </div>
+  <div class="field">
+    <label for="zygosity-{{ form_id }}">How many altered copies</label>
+    <select id="zygosity-{{ form_id }}" name="zygosity" required>
+      {% for item in zygosities %}
+      <option value="{{ item }}">{{ zygosity_labels[item] }}</option>
+      {% endfor %}
+    </select>
+    <p class="help">One altered copy means a carrier. Two altered copies means the person has the condition. “The report does not say” is stored and is not treated as a confirmed carrier, so it does not block a match.</p>
+  </div>
+  <button type="submit">Add carrier result</button>
+</form>

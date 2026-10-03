@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Account{% endblock %}
+{% block body %}
+<h1>Account</h1>
+<p>Signed in as {{ user.email }} ({{ user.role }}).</p>
+<p>Closing the account deletes photos keys, genotypes, survey answers, and explanation logs. Results stay in the app and are not exported.</p>
+<form method="post" action="/account/delete" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <label class="choice">
+    <input type="checkbox" name="confirm" value="yes" />
+    <span>Close this account and delete its records.</span>
+  </label>
+  <button type="submit" class="danger">Close account</button>
+</form>
+{% endblock %}

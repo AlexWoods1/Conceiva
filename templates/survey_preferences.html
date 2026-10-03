@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Preferences{% endblock %}
+{% block body %}
+<h1>Preferences</h1>
+<p>Step 2 of 2. These answers are soft weights. A carrier conflict remains a hard stop even if the preferences fit.</p>
+<form method="post" action="/couple/survey/preferences" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <div class="field">
+    <label for="id_release">ID release</label>
+    <select id="id_release" name="id_release" required>
+      {% for item in id_release %}
+      <option value="{{ item }}" {% if survey.id_release == item %}selected{% endif %}>{{ id_release_labels[item] }}</option>
+      {% endfor %}
+    </select>
+    <p class="help">Whether you want a donor who agrees to be identifiable later, or one who stays anonymous. A mismatch lowers the rank. "Either is fine" matches every donor policy.</p>
+  </div>
+  <div class="field">
+    <label for="family_limit">Family limit</label>
+    <input id="family_limit" name="family_limit" type="number" min="1" max="25" value="{{ survey.family_limit or 1 }}" required />
+    <p class="help">How many family slots you want this donor's limit to cover. If the bank's cap for that donor is lower than this number, the rank drops. Example: you enter 2 and the donor is capped at 1.</p>
+  </div>
+  <button type="submit">Save and see matches</button>
+</form>
+{% endblock %}

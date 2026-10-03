@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Donor Match{% endblock %}
+{% block body %}
+<section class="hero">
+  <p class="eyebrow">Couples and sperm banks</p>
+  <h1>See carrier conflicts before you choose a donor.</h1>
+  <p class="lede">
+    Rank donors from carrier status, blood-type flags, and survey fit.
+    Ancestry is context for allele frequency. It does not change the rank.
+  </p>
+</section>
+<div class="doors">
+  <a class="door" href="/login?role=couple">
+    <h2>Couple</h2>
+    <p>Enter history, a carrier form, and a two-step survey. Review a ranked list.</p>
+  </a>
+  <a class="door" href="/login?role=bank">
+    <h2>Sperm bank</h2>
+    <p>Keep a per-donor survey, or confirm fields parsed from a public catalog page.</p>
+  </a>
+</div>
+<section>
+  <h2>How a rank is built</h2>
+  <div class="facts">
+    <article>
+      <h3>Hard stop</h3>
+      <p>A gene both profiles list as a confirmed recessive carrier blocks that donor. The conflict stays on the row.</p>
+    </article>
+    <article>
+      <h3>Soft weights</h3>
+      <p>ID release, family limit, CMV, and quarantine change the score. Rh is a flag, not a block.</p>
+    </article>
+    <article>
+      <h3>Context only</h3>
+      <p>Ancestry overlap is allele-frequency context. It does not change the rank. There is no race filter.</p>
+    </article>
+  </div>
+  <p><a class="button" href="/start">Follow the sample start</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{% if donor.id %}{{ donor.code }}{% else %}New donor{% endif %}{% endblock %}
+{% block body %}
+<h1>{% if donor.id %}{{ donor.code }}{% else %}New donor{% endif %}</h1>
+<p>Per-donor bank survey. The portrait is a synthetic placeholder.</p>
+<form method="post" action="{% if donor.id %}/bank/donors/{{ donor.id }}{% else %}/bank/donors/new{% endif %}" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <label>Code <input name="code" value="{{ donor.code }}" required maxlength="64" /></label>
+  <label>Blood type
+    <select name="blood_type">
+      {% for item in blood_types %}
+      <option value="{{ item }}" {% if donor.blood_type == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Rh
+    <select name="rh">
+      {% for item in rh_values %}
+      <option value="{{ item }}" {% if donor.rh == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Ancestry context
+    <input name="ancestry" value="{{ donor.ancestry }}" maxlength="255" />
+  </label>
+  <label>Panel <input name="panel" value="{{ donor.panel }}" maxlength="128" /></label>
+  <label>CMV
+    <select name="cmv">
+      {% for item in cmv_status %}
+      <option value="{{ item }}" {% if donor.cmv == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Quarantine
+    <select name="quarantine">
+      {% for item in quarantine %}
+      <option value="{{ item }}" {% if donor.quarantine == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Family limit
+    <input name="family_limit" type="number" min="1" max="25" value="{{ donor.family_limit or 10 }}" required />
+  </label>
+  <label>ID-release policy
+    <select name="id_release_policy">
+      {% for item in id_release %}
+      <option value="{{ item }}" {% if donor.id_release_policy == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Synthetic portrait
+    <select name="photo_key">
+      {% for item in photo_keys %}
+      <option value="{{ item }}" {% if donor.photo_key == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Save donor</button>
+</form>
+{% if donor.id %}
+<h2>Carrier results</h2>
+{% with post_url="/bank/donors/" ~ donor.id ~ "/carriers", delete_url="", form_id="donor" %}
+{% include "carrier_form.html" %}
+{% endwith %}
+<form method="post" action="/bank/donors/{{ donor.id }}/delete">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <button type="submit" class="danger">Delete donor</button>
+</form>
+{% endif %}
+{% endblock %}

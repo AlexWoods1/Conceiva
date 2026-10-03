@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Matches{% endblock %}
+{% block body %}
+<h1>Ranked donors</h1>
+<p>Clear medical matches come first. A carrier conflict stays on the row and is not hidden. Blood type on your history is the parent's type, shown here next to the donor's type.</p>
+{% if not survey.preferences_done %}
+<p>Save both survey steps to see a ranked list.</p>
+{% elif not rows %}
+<p>No confirmed donors are on file.</p>
+{% else %}
+<div class="rows">
+  {% for donor, result in rows %}
+  <article class="donor-row">
+    <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" width="128" height="128" />
+    <div class="donor-copy">
+      {% if result.hard_stop %}
+      <p class="stop">Carrier conflict. Not a candidate.</p>
+      {% endif %}
+      <h2>{{ donor.code }}</h2>
+      {% if result.hard_stop %}
+      <p class="score">Blocked</p>
+      {% else %}
+      <p class="score">Medical rank {{ result.score }}</p>
+      {% endif %}
+      <p class="meta">
+        Donor blood {{ donor.blood_type or "not recorded" }}
+        {% if donor.rh %}{{ rh_labels[donor.rh] }}{% endif %}
+        · {{ cmv_status_labels[donor.cmv] }}
+        · {{ quarantine_labels[donor.quarantine] }}
+        · family limit {{ donor.family_limit }}
+        · {{ id_release_labels[donor.id_release_policy] }}
+      </p>
+      {% if demo_blurbs.get(donor.code) %}
+      <p class="help">{{ demo_blurbs[donor.code] }}</p>
+      {% endif %}
+      <ul class="reasons">
+        {% for reason in result.reasons if reason.kind == "hard_stop" %}
+        <li>{{ reason.text }}</li>
+        {% endfor %}
+        {% for reason in result.reasons if reason.kind != "hard_stop" %}
+        <li>{{ reason.text }}</li>
+        {% endfor %}
+      </ul>
+      <p class="caption">DiceBear Personas stand-in (MIT). Not a donor, not a child, and not a prediction.</p>
+      {% if face_compare and result.face_score is not none %}
+      <p>Non-clinical resemblance stub: {{ result.face_score }}. Not part of the medical rank.</p>
+      {% endif %}
+      <a href="/match/{{ donor.id }}">Open explanation</a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Donors{% endblock %}
+{% block body %}
+<h1>Donor inventory</h1>
+<p><a href="/bank/donors/new">Add a donor</a> or <a href="/bank/catalog">confirm a public catalog</a>.</p>
+{% if donors %}
+<table>
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Ancestry context</th>
+      <th>CMV</th>
+      <th>Quarantine</th>
+      <th>Family limit</th>
+      <th>ID release</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for donor in donors %}
+    <tr>
+      <td><a href="/bank/donors/{{ donor.id }}">{{ donor.code }}</a></td>
+      <td>{{ donor.ancestry }}</td>
+      <td>{{ donor.cmv }}</td>
+      <td>{{ donor.quarantine }}</td>
+      <td>{{ donor.family_limit }}</td>
+      <td>{{ donor.id_release_policy }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No donors yet.</p>
+{% endif %}
+{% endblock %}

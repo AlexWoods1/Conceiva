@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ donor.code }}{% endblock %}
+{% block body %}
+<p><a href="/match">Back to matches</a></p>
+{% if result.hard_stop %}
+<p class="stop">Carrier conflict. Not a candidate.</p>
+{% endif %}
+<ul class="reasons">
+  {% for reason in result.reasons if reason.kind == "hard_stop" %}
+  <li>{{ reason.text }}</li>
+  {% endfor %}
+  {% for reason in result.reasons if reason.kind != "hard_stop" %}
+  <li>{{ reason.text }}</li>
+  {% endfor %}
+</ul>
+<div class="identity">
+  <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" width="128" height="128" />
+  <p class="caption">DiceBear Personas stand-in (MIT). Not a donor, not a child, and not a prediction.</p>
+  <h1>{{ donor.code }}</h1>
+  {% if result.hard_stop %}
+  <p class="score">Blocked</p>
+  {% else %}
+  <p class="score">Medical rank {{ result.score }}</p>
+  {% endif %}
+</div>
+<h2>Explanation</h2>
+<p>Each sentence opens the database field it used. Missing facts stay missing.</p>
+<form method="post" action="/match/{{ donor.id }}/explain">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <button type="submit">Explain from the record</button>
+</form>
+{% if sentences %}
+<div class="cites">
+  {% for sentence in sentences %}
+  <details class="cite">
+    <summary>{{ sentence.text }}</summary>
+    <p>Field <code>{{ sentence.field }}</code>{% if sentence.value %}. Value {{ sentence.value }}{% else %}. No stored value.{% endif %}</p>
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<p>No explanation has been requested yet.</p>
+{% endif %}
+{% endblock %}

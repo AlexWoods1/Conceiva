@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Donor Match{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">Donor Match</a>
+      <nav class="nav">
+        {% if user and user.consent_at and user.role == "couple" %}
+        <a href="/couple/history">History</a>
+        <a href="/couple/carriers">Carriers</a>
+        <a href="/couple/survey/clinical">Clinical survey</a>
+        <a href="/couple/survey/preferences">Preferences</a>
+        <a href="/match">Matches</a>
+        {% elif user and user.consent_at and user.role == "bank" %}
+        <a href="/bank">Donors</a>
+        <a href="/bank/catalog">Catalog</a>
+        {% endif %}
+        {% if user %}
+        <a href="/account">Account</a>
+        <form method="post" action="/logout">
+          <input type="hidden" name="csrf" value="{{ csrf }}" />
+          <button type="submit" class="linkish">Log out</button>
+        </form>
+        {% else %}
+        <a href="/start">Sample start</a>
+        <a href="/login">Sign in</a>
+        {% endif %}
+      </nav>
+    </header>
+    <main>
+      {% if flash %}<p class="flash" role="status">{{ flash }}</p>{% endif %}
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      {% block body %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+      <nav>
+        <a href="/start">Sample start</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <p>Decision support on records you supply. Not a diagnosis and not a prediction of a child.</p>
+    </footer>
+  </body>
+</html>

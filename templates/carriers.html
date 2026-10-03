@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Carriers{% endblock %}
+{% block body %}
+<h1>Carrier results</h1>
+<p>Enter what the carrier report says for {{ subject_label }}.</p>
+{% set post_url = "/couple/carriers" %}
+{% set delete_url = "/couple/carriers/" %}
+{% set form_id = "couple" %}
+{% include "carrier_form.html" %}
+<p><a href="/couple/survey/clinical">Continue to the clinical survey</a></p>
+{% endblock %}

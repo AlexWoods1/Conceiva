@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Contact{% endblock %}
+{% block body %}
+<h1>Contact</h1>
+<p>
+  Write to <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+  The form below saves a message in this demo. It does not send email.
+</p>
+{% if contact_email.endswith("@example.com") %}
+<p class="caption">That address is a placeholder. Set CONTACT_EMAIL before a public launch.</p>
+{% endif %}
+<form method="post" action="/contact" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}" />
+  <label>Name
+    <input name="name" required maxlength="80" value="{{ form.name or '' }}" />
+  </label>
+  <label>Email
+    <input name="email" type="email" required maxlength="255" value="{{ form.email or '' }}" />
+  </label>
+  <label>Message
+    <textarea name="message" required minlength="10" maxlength="2000">{{ form.message or '' }}</textarea>
+  </label>
+  <button type="submit">Save message</button>
+</form>
+{% endblock %}
