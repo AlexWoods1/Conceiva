@@ -12,7 +12,11 @@
 <div class="rows">
   {% for donor, result, carriers in rows %}
   <article class="donor-row">
+    {% if donor.baby_photo_key %}
+    <img class="portrait portrait-baby" src="/static/photos/{{ donor.baby_photo_key }}.jpg" alt="Childhood photo of donor {{ donor.code }}" width="128" height="128" />
+    {% else %}
     <img class="portrait" src="/static/photos/{{ donor.photo_key }}.png" alt="Open-source stand-in portrait for {{ donor.code }}" width="128" height="128" />
+    {% endif %}
     <div class="donor-copy">
       {% if result.hard_stop %}
       <p class="stop">Carrier conflict. Not a medical candidate.</p>

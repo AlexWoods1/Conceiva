@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from starlette.requests import ClientDisconnect
 from app.constants import (
     ADULT_PHOTO_KEYS,
     APPOINTMENT_BOOKED,
+    BABY_PHOTO_KEYS,
     BLOOD_TYPES,
     COMMON_CARRIERS,
     CMV_REQUIREMENT_LABELS,
@@ -168,6 +169,10 @@ def _redirect(path: str) -> RedirectResponse:
     return RedirectResponse(path, status_code=303)
 
 
+def _wants_json(request: Request) -> bool:
+    return "application/json" in request.headers.get("accept", "")
+
+
 async def _form(request: Request, max_part_size: int | None = None):
     kwargs = {} if max_part_size is None else {"max_part_size": max_part_size}
     try:
@@ -315,7 +320,21 @@ def _email_address(value: str) -> str:
 @router.get("/")
 def home(request: Request):
     """Marketing home with a couple door and a bank door."""
-    return _render(request, "home.html", _user(request))
+    latest = _db(request).scalars(
+        select(Donor)
+        .where(Donor.catalog_confirmed.is_(True), Donor.baby_photo_key != "")
+        .order_by(Donor.id.desc())
+        .limit(8)
+    )
+    return _render(
+        request,
+        "home.html",
+        _user(request),
+        latest_donors=list(latest),
+        hair_colors=HAIR_COLORS,
+        eye_colors=EYE_COLORS,
+        carrier_gene_count=len(COMMON_CARRIERS),
+    )
 
 
 @router.get("/start")
@@ -860,6 +879,7 @@ def _donor_page(
         blood_types=BLOOD_TYPES,
         rh_values=RH_VALUES,
         photo_keys=PHOTO_KEYS,
+        baby_photo_keys=BABY_PHOTO_KEYS,
         cmv_status=CMV_STATUS,
         quarantine=QUARANTINE,
         id_release=ID_RELEASE,
@@ -889,6 +909,9 @@ def _apply_donor_form(donor: Donor, form) -> None:
     donor.ancestry = _clean_text(str(form.get("ancestry", "")), 255)
     donor.photo_key = _choice(
         str(form.get("photo_key", "")), PHOTO_KEYS, "synthetic portrait"
+    )
+    donor.baby_photo_key = _optional_choice(
+        str(form.get("baby_photo_key", "")), BABY_PHOTO_KEYS, "childhood photo"
     )
     donor.panel = _clean_text(str(form.get("panel", "")), 128)
     donor.cmv = _choice(str(form.get("cmv", "")), CMV_STATUS, "CMV status")
@@ -1302,11 +1325,14 @@ async def shortlist_add(request: Request, donor_id: int):
         return _redirect(needed.path)
     db = _db(request)
     error = add_to_shortlist(db, user.id, donor_id)
-    if error:
-        _flash(request, error)
-    else:
+    if not error:
         db.commit()
-        _flash(request, "Added to shortlist.")
+    message = error or "Added to shortlist."
+    if _wants_json(request):
+        return JSONResponse(
+            {"ok": not error, "message": message}, status_code=400 if error else 200
+        )
+    _flash(request, message)
     return _redirect("/match")
 
 
@@ -1321,6 +1347,8 @@ async def shortlist_remove(request: Request, donor_id: int):
     db = _db(request)
     remove_from_shortlist(db, user.id, donor_id)
     db.commit()
+    if _wants_json(request):
+        return JSONResponse({"ok": True, "message": "Removed from shortlist."})
     _flash(request, "Removed from shortlist.")
     referer = request.headers.get("referer", "")
     if "/couple/shortlist" in referer:

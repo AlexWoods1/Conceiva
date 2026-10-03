@@ -1,102 +1,289 @@
 {% extends "base.html" %}
 {% block title %}Donor Match{% endblock %}
+{% block body_class %}page-landing{% endblock %}
 {% block body %}
 <div class="landing">
-  <section class="hero landing-hero">
-    <p class="hero-brand">Donor Match</p>
-    <h1>See carrier conflicts before you choose a donor.</h1>
-    <p class="lede">
-      Rank donors from carrier status, blood-type flags, and survey fit.
-      Ancestry is allele-frequency context only. It does not change the rank.
-    </p>
-    <div class="hero-cta">
-      <a class="button" href="/start">Sample start</a>
-      {% if user and user.consent_at and user.role == "couple" %}
-      <a class="button button-ghost" href="/match">View matches</a>
-      {% elif user and user.consent_at and user.role == "bank" %}
-      <a class="button button-ghost" href="/bank">Your donors</a>
-      {% elif user and user.consent_at and user.role == "counselor" %}
-      <a class="button button-ghost" href="/counselor">Your visits</a>
-      {% elif user %}
-      <a class="button button-ghost" href="/account">Account</a>
-      {% else %}
-      <a class="button button-ghost" href="/login">Sign in</a>
-      {% endif %}
+  <section class="landing-hero">
+    <img class="hero-photo" src="/static/photos/hero-family.jpg" alt="" />
+    <div class="hero-shade" aria-hidden="true"></div>
+    <svg class="hero-wave" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,140 C240,60 480,40 720,100 C960,160 1200,190 1440,120 L1440,220 L0,220 Z" fill="#5a9671" opacity="0.55" />
+      <path d="M0,180 C300,120 560,130 820,170 C1080,210 1260,200 1440,170 L1440,220 L0,220 Z" fill="#fbf8f2" />
+    </svg>
+    <div class="landing-hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow eyebrow-light">Find a donor you can connect with</p>
+        <h1>Family building that puts your health first</h1>
+        <p class="lede">
+          Meet donors one card at a time, starting with their baby photos. Carrier conflicts surface
+          before you fall for a profile. Blood-type flags and your survey set the rank.
+        </p>
+        <div class="hero-cta">
+          {% if user and user.consent_at and user.role == "couple" %}
+          <a class="button button-coral" href="/match">See my matches</a>
+          {% elif user and user.consent_at and user.role == "bank" %}
+          <a class="button button-coral" href="/bank">Your donors</a>
+          {% elif user and user.consent_at and user.role == "counselor" %}
+          <a class="button button-coral" href="/counselor">Your visits</a>
+          {% elif user %}
+          <a class="button button-coral" href="/account">Account</a>
+          {% else %}
+          <a class="button button-coral" href="/login?role=couple">Grow my family</a>
+          {% endif %}
+          <a class="button button-lavender" href="/start">Sample start</a>
+        </div>
+      </div>
+
+      <div class="phone" aria-hidden="true">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <p class="phone-title">Your matches</p>
+          <div class="phone-card">
+            <img src="/static/photos/baby-1.jpg" alt="" />
+            <div class="phone-card-copy">
+              <span class="rank-badge">#1 &middot; Rank 100</span>
+              <strong>DN-100 <span class="blood-chip">O&minus;</span></strong>
+              <span class="phone-chips"><i>Blond</i><i>Blue eyes</i><i>6'1"</i></span>
+            </div>
+          </div>
+          <div class="phone-actions">
+            <span class="action action-nope">&#10005;</span>
+            <span class="action action-info">i</span>
+            <span class="action action-like">&#9829;</span>
+          </div>
+        </div>
+        <div class="match-pop">
+          <p>It's a match!</p>
+          <div class="match-pop-photos">
+            <img src="/static/photos/baby-6.jpg" alt="" />
+            <span>&#9829;</span>
+          </div>
+          <small>DN-630 added to your shortlist</small>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="landing-section">
-    <h2>What it is</h2>
-    <p class="section-lede">
-      Decision support for couples and sperm banks comparing a couple’s carrier
-      report with donor records you supply. One place to surface hard medical
-      conflicts first, then preference fit — not a diagnosis and not a prediction
-      of a child.
-    </p>
+  <section class="quick-search">
+    <form method="get" action="/match" class="quick-search-form">
+      <p class="quick-search-title">Quick search</p>
+      <label>Hair color
+        <select name="hair_color">
+          <option value="">Any</option>
+          {% for item in hair_colors %}<option value="{{ item }}">{{ item|capitalize }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Eye color
+        <select name="eye_color">
+          <option value="">Any</option>
+          {% for item in eye_colors %}<option value="{{ item }}">{{ item|capitalize }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Min height (cm)
+        <input name="min_height_cm" type="number" min="140" max="220" placeholder="Any" />
+      </label>
+      <button type="submit" class="button-magenta">Search donors</button>
+    </form>
+    <p class="help">Filters only narrow the deck. They never change the medical rank, and there is no race filter.</p>
   </section>
 
+  {% if latest_donors %}
   <section class="landing-section">
-    <h2>How a rank is built</h2>
-    <div class="facts">
-      <article>
-        <h3>Hard stop</h3>
-        <p>A gene both profiles list as a confirmed recessive carrier blocks that donor. The conflict stays on the row.</p>
-      </article>
-      <article>
-        <h3>Soft weights</h3>
-        <p>ID release, family limit, CMV, and quarantine change the score. Rh is a flag, not a block.</p>
-      </article>
-      <article>
-        <h3>Context only</h3>
-        <p>Ancestry overlap is allele-frequency context. It does not change the rank. There is no race filter.</p>
-        <p>Physical traits such as hair, eyes, height, and BMI can narrow the list. They never change the rank.</p>
-      </article>
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Latest donors</p>
+        <h2 class="display">Meet them as they were</h2>
+      </div>
+      <a class="pill" href="/match">Browse all &rarr;</a>
     </div>
-  </section>
-
-  <section class="landing-section llm-section">
-    <h2>Explain from the record</h2>
-    <p class="section-lede">
-      Each match can open an explanation that cites stored database fields.
-      Missing facts are stated as not in the record. Clinical free text stays out
-      of model context.
-    </p>
-    <ul class="plain llm-points">
-      <li>With <code>LLM_API_KEY</code> set, only those retrieved fields go to the model endpoint.</li>
-      <li>Without a key, the same fields drive a deterministic explanation from the stored record.</li>
-      <li>The model does not diagnose, predict appearance, or rank by race or attractiveness.</li>
+    <ul class="member-grid">
+      {% for donor in latest_donors %}
+      <li>
+        <a href="/match" class="member">
+          <img src="/static/photos/{{ donor.baby_photo_key }}.jpg" alt="Childhood photo of donor {{ donor.code }}" loading="lazy" />
+          <strong>{{ donor.code }}</strong>
+          <span>{{ trait_summary(donor)[:2]|join(" · ") or "Traits not recorded" }}</span>
+        </a>
+      </li>
+      {% endfor %}
     </ul>
-  </section>
-
-  {% if not user %}
-  <section class="landing-section">
-    <h2>Choose a door</h2>
-    <p class="section-lede">Sign in as the role that matches how you will use the demo.</p>
-    <div class="doors">
-      <a class="door" href="/login?role=couple">
-        <h2>Couple</h2>
-        <p>Enter history, a carrier form, and a two-step survey. Review a ranked list.</p>
-      </a>
-      <a class="door" href="/login?role=bank">
-        <h2>Sperm bank</h2>
-        <p>Keep a per-donor survey, or confirm fields parsed from a public catalog page.</p>
-      </a>
-      <a class="door" href="/login?role=counselor">
-        <h2>Genetic counselor</h2>
-        <p>Post open slots, open a couple’s shortlist, and run a cited AI report per candidate.</p>
-      </a>
-    </div>
   </section>
   {% endif %}
 
+  <section class="landing-section">
+    <p class="eyebrow">Our platform</p>
+    <h2 class="display">How can Donor Match help you?</h2>
+    <div class="doors">
+      <a class="door door-lavender" href="/login?role=couple">
+        <span class="door-tag">Couples</span>
+        <h3>Swipe through donors</h3>
+        <p>Enter your history, carrier report, and a two-step survey. Then swipe through ranked donor cards, starting with each donor's baby photo.</p>
+        <span class="door-link">Grow my family &rarr;</span>
+      </a>
+      <a class="door door-coral" href="/login?role=bank">
+        <span class="door-tag">Sperm banks</span>
+        <h3>Publish rich profiles</h3>
+        <p>Keep a per-donor survey with traits and a childhood photo, or confirm fields parsed from a public catalog page.</p>
+        <span class="door-link">Manage donors &rarr;</span>
+      </a>
+      <a class="door door-sky" href="/login?role=counselor">
+        <span class="door-tag">Genetic counselors</span>
+        <h3>Review the shortlist</h3>
+        <p>Post open slots, open a couple's shortlist, and run a cited AI report for each candidate.</p>
+        <span class="door-link">Open visits &rarr;</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="steps-band">
+    <div class="landing-section">
+      <p class="eyebrow">How it works</p>
+      <h2 class="display">From first swipe to counselor visit</h2>
+      <ol class="how-steps">
+        <li>
+          <span class="how-num">1</span>
+          <h3>Build your profile</h3>
+          <p>Add your blood type, carrier results, and what matters to you: ID release, family limit, CMV.</p>
+        </li>
+        <li>
+          <span class="how-num">2</span>
+          <h3>Swipe and shortlist</h3>
+          <p>Swipe right to shortlist, left to pass. Every card shows the medical rank and why.</p>
+        </li>
+        <li>
+          <span class="how-num">3</span>
+          <h3>Meet a counselor</h3>
+          <p>Book a genetic counselor who opens your shortlist and runs a cited report per donor.</p>
+        </li>
+        <li>
+          <span class="how-num">4</span>
+          <h3>Decide together</h3>
+          <p>Ask the explanation tool about any card. It only cites what is on record.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="landing-section">
+    <p class="eyebrow">How a rank is built</p>
+    <h2 class="display">Medical fit first, chemistry second</h2>
+    <div class="accordion">
+      <details open>
+        <summary><span class="fact-num">01</span> Hard stop</summary>
+        <p>A gene both profiles list as a confirmed recessive carrier blocks that donor. The conflict stays on the card, so you always see why.</p>
+      </details>
+      <details>
+        <summary><span class="fact-num">02</span> Soft weights</summary>
+        <p>ID release, family limit, CMV, and quarantine change the score. Rh is a flag, not a block.</p>
+      </details>
+      <details>
+        <summary><span class="fact-num">03</span> Context only</summary>
+        <p>Ancestry overlap is allele-frequency context and does not change the rank. There is no race filter. Hair, eyes, height, and BMI can narrow the deck but never change the rank.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="mission-band">
+    <div class="mission-inner">
+      <h2 class="display">Every card is built from the record. Missing facts stay missing.</h2>
+      <ul class="stats">
+        <li><strong>{{ carrier_gene_count }}</strong><span>common carrier genes on the quick-add list</span></li>
+        <li><strong>{{ max_shortlist }}</strong><span>donors per shortlist, one counselor visit</span></li>
+        <li><strong>0</strong><span>race filters or attractiveness scores</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="landing-section" data-carousel>
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Sample stories</p>
+        <h2 class="display">What we hope families say</h2>
+      </div>
+      <div class="carousel-buttons">
+        <button type="button" class="round-button" data-carousel-step="-1" aria-label="Previous story">&larr;</button>
+        <button type="button" class="round-button" data-carousel-step="1" aria-label="Next story">&rarr;</button>
+      </div>
+    </div>
+    <ul class="story-track" data-carousel-track>
+      <li class="story story-lime">
+        <p>"Seeing the carrier conflict before we got attached to a profile saved us a hard conversation later."</p>
+        <span>Illustrative couple</span>
+      </li>
+      <li class="story story-lavender">
+        <p>"The baby photos made it feel personal, and the rank kept it grounded in the medical facts."</p>
+        <span>Illustrative intended parent</span>
+      </li>
+      <li class="story story-peach">
+        <p>"Our counselor opened the shortlist and walked through every cited reason with us."</p>
+        <span>Illustrative couple</span>
+      </li>
+      <li class="story story-sky">
+        <p>"Uploading a childhood photo and traits took minutes, and couples see exactly what we recorded."</p>
+        <span>Illustrative bank coordinator</span>
+      </li>
+    </ul>
+    <p class="help">Sample quotes written for this demo. They are not from real users.</p>
+  </section>
+
+  <section class="landing-section">
+    <p class="eyebrow">Guides for every path</p>
+    <h2 class="display">Built for every kind of family</h2>
+    <div class="guide-grid">
+      <a class="guide" href="/login?role=couple"><h3>Solo parents-to-be</h3><p>Start with your own history and carrier report. The deck works the same for one parent.</p><span>Get started &rarr;</span></a>
+      <a class="guide" href="/login?role=couple"><h3>Queer couples</h3><p>Talk through priorities together, then set ID release and family limits in the survey.</p><span>Get started &rarr;</span></a>
+      <a class="guide" href="/login?role=couple"><h3>Heterosexual couples</h3><p>Add the partner whose carrier results matter for the match, and compare blood types.</p><span>Get started &rarr;</span></a>
+      <a class="guide" href="/start"><h3>Trying the demo</h3><p>Follow the sample start to see a hard stop, a soft penalty, and a clean match.</p><span>Sample start &rarr;</span></a>
+    </div>
+  </section>
+
   <section class="landing-section limits">
-    <h2>What we do not do</h2>
-    <ul class="plain">
-      <li>Predict or generate a future child’s face or appearance</li>
+    <p class="eyebrow">What we do not do</p>
+    <ul class="limit-grid">
+      <li>Predict or generate a future child's face or appearance. Baby photos show the donor as a child.</li>
       <li>Rank donors by IQ, personality, attractiveness, or other polygenic traits</li>
       <li>Claim to diagnose disease or replace clinical genetic counseling</li>
       <li>Use ancestry or race as a match-quality score</li>
     </ul>
+  </section>
+
+  <section class="landing-section">
+    <p class="eyebrow">FAQ</p>
+    <h2 class="display">Frequently asked questions</h2>
+    <div class="accordion faq">
+      <details>
+        <summary>Whose baby photo is on each card?</summary>
+        <p>The donor's own childhood photo, as sperm banks publish them. It is never a prediction of your child. In this demo every photo is a synthetic stand-in.</p>
+      </details>
+      <details>
+        <summary>Does swiping change the medical rank?</summary>
+        <p>No. Swiping right adds a donor to your shortlist, and swiping left hides the card for now. The rank comes only from carrier status, blood type, and your survey.</p>
+      </details>
+      <details>
+        <summary>Can I still shortlist a blocked donor?</summary>
+        <p>Yes. A carrier conflict stays visible on the card, and you can keep that donor on the shortlist to discuss with a counselor.</p>
+      </details>
+      <details>
+        <summary>What does the paywall unlock?</summary>
+        <p>Intake forms are free. A one-time payment unlocks the donor match deck and explanations for a couple account.</p>
+      </details>
+      <details>
+        <summary>What goes to the AI explanation?</summary>
+        <p>Only the retrieved match fields. Clinical free text stays out of model context, and missing facts are stated as not in the record.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    {% if user %}
+    <h2 class="display">Ready for your next swipe?</h2>
+    <p>Your deck is ranked from your saved history and survey.</p>
+    <a class="button button-white" href="{% if user.role == 'couple' %}/match{% else %}/account{% endif %}">{% if user.role == 'couple' %}Open my deck{% else %}My account{% endif %}</a>
+    {% else %}
+    <h2 class="display">Sign up now and begin your search</h2>
+    <p>Intake is free. Swipe through ranked donors once your survey is saved.</p>
+    <a class="button button-white" href="/login?role=couple">Join free</a>
+    {% endif %}
   </section>
 </div>
 {% endblock %}

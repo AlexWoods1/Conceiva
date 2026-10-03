@@ -59,6 +59,7 @@ DEMO_TRAITS = {
         "height_cm": 185,
         "weight_kg": 80,
         "ethnicity": "Northern European",
+        "baby_photo_key": "baby-1",
     },
     "DN-240": {
         "hair_color": "brown",
@@ -67,6 +68,7 @@ DEMO_TRAITS = {
         "height_cm": 178,
         "weight_kg": 74,
         "ethnicity": "Northern European",
+        "baby_photo_key": "baby-2",
     },
     "DN-310": {
         "hair_color": "black",
@@ -75,6 +77,7 @@ DEMO_TRAITS = {
         "height_cm": 175,
         "weight_kg": 70,
         "ethnicity": "East Asian",
+        "baby_photo_key": "baby-3",
     },
     "DN-410": {
         "hair_color": "brown",
@@ -83,6 +86,7 @@ DEMO_TRAITS = {
         "height_cm": 172,
         "weight_kg": 77,
         "ethnicity": "Ashkenazi Jewish",
+        "baby_photo_key": "baby-4",
     },
     "DN-520": {
         "hair_color": "black",
@@ -91,8 +95,14 @@ DEMO_TRAITS = {
         "height_cm": 180,
         "weight_kg": 95,
         "ethnicity": "East Asian",
+        "baby_photo_key": "baby-5",
     },
-    "DN-630": {"hair_color": "red", "hair_type": "curly", "eye_color": "blue"},
+    "DN-630": {
+        "hair_color": "red",
+        "hair_type": "curly",
+        "eye_color": "blue",
+        "baby_photo_key": "baby-6",
+    },
 }
 
 

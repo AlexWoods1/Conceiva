@@ -33,6 +33,7 @@ _SQLITE_COLUMN_DDL: dict[str, tuple[tuple[str, str], ...]] = {
         ("height_cm", "INTEGER"),
         ("weight_kg", "INTEGER"),
         ("ethnicity", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        ("baby_photo_key", "VARCHAR(32) NOT NULL DEFAULT ''"),
     ),
     "users": (
         ("paid_at", "DATETIME"),

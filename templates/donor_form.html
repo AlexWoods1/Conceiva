@@ -96,6 +96,15 @@
       {% endfor %}
     </select>
   </label>
+  <label>Childhood photo
+    <select name="baby_photo_key">
+      <option value="" {% if not donor.baby_photo_key %}selected{% endif %}>None on file</option>
+      {% for item in baby_photo_keys %}
+      <option value="{{ item }}" {% if donor.baby_photo_key == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p class="help">The donor's own baby photo, shown first on the couple's match card. It is never a prediction of a child.</p>
   <button type="submit">Save donor</button>
 </form>
 {% if donor.id %}
