@@ -978,7 +978,13 @@ async def donor_motility_upload(request: Request, donor_id: int):
         )
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
-    donor.motility_video_url = result["annotated_video_url"]
+    # The service returns a path relative to itself (e.g. "/videos/<id>/...").
+    # This app renders it on its own origin, so the path alone 404s in the
+    # browser -- store the full URL against the service host we actually
+    # called, the one host that's guaranteed to serve it.
+    donor.motility_video_url = (
+        request.app.state.settings.motility_service_url + result["annotated_video_url"]
+    )
     donor.motility_below_reference = (
         donor.motility_total_pct < WHO_TOTAL_MOTILITY_MIN_PCT
         or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT

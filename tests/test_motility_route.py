@@ -47,6 +47,20 @@ def test_motility_upload_stores_the_result(api, monkeypatch):
     )
     assert response.status_code == 303
 
+    db = api.session()
+    try:
+        donor = db.get(Donor, donor_id)
+        # The service returns a path relative to ITS OWN origin, not this
+        # app's -- a bare path stored verbatim 404s in the browser, since
+        # <video src> resolves against the page's origin. Caught live by
+        # running the app and the service on separate ports and actually
+        # loading the result: percentages saved fine, player was broken.
+        assert (
+            donor.motility_video_url == "http://localhost:8010/videos/abc/tracked.mp4"
+        )
+    finally:
+        db.close()
+
     page = api.get(f"/bank/donors/{donor_id}")
     body = page.json()
     assert body["motility_total_pct"] == 48.3
