@@ -1,0 +1,28 @@
+# * Cheap EC2 host for YOLO motility (CPU torch — no CUDA download).
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock ./
+COPY backend ./backend
+COPY ml ./ml
+COPY weights ./weights
+
+# * Skip default CUDA torch from PyPI (~2.5GB). Install CPU wheels instead.
+RUN uv sync --frozen --group motility --no-dev \
+        --no-install-package torch \
+        --no-install-package torchvision \
+    && uv pip install --python .venv/bin/python \
+        torch torchvision \
+        --index-url https://download.pytorch.org/whl/cpu
+
+ENV MOTILITY_SERVICE_DEV=0
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8010
+
+CMD ["uv", "run", "--group", "motility", "uvicorn", "backend.main:app", \
+     "--host", "0.0.0.0", "--port", "8010"]

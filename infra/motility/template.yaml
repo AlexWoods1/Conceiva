@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cheap single-EC2 motility service (CPU torch on-host, no ALB).
+
+Parameters:
+  ApiKey:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+  SourceBucket:
+    Type: String
+    Description: S3 bucket holding motility-src.tgz
+  SourceKey:
+    Type: String
+    Default: motility-src.tgz
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  MotilitySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Motility FastAPI on 8010
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8010
+          ToPort: 8010
+          CidrIp: 0.0.0.0/0
+          Description: Public analyze + video playback
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: Optional SSH
+
+  MotilityInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadMotilitySource
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${SourceBucket}/${SourceKey}"
+
+  MotilityInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MotilityInstanceRole
+
+  MotilityEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: spermmatch-motility
+
+  MotilityInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref MotilityInstanceProfile
+      SecurityGroupIds:
+        - !Ref MotilitySecurityGroup
+      MetadataOptions:
+        HttpTokens: optional
+        HttpEndpoint: enabled
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > >(tee /var/log/motility-bootstrap.log) 2>&1
+
+          dnf install -y python3.12 gcc git mesa-libGL glib2
+
+          # * Swap helps uv/torch install on t3.small (2GB RAM).
+          fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="/root/.local/bin:$PATH"
+
+          mkdir -p /opt/motility
+          aws s3 cp "s3://${SourceBucket}/${SourceKey}" /tmp/motility-src.tgz
+          tar -xzf /tmp/motility-src.tgz -C /opt/motility
+          cd /opt/motility
+
+          uv sync --frozen --group motility --no-dev \
+            --no-install-package torch \
+            --no-install-package torchvision
+          uv pip install --python .venv/bin/python \
+            torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
+          printf '%s\n' \
+            '[Unit]' \
+            'Description=SpermMatch motility service' \
+            'After=network.target' \
+            '' \
+            '[Service]' \
+            'Type=simple' \
+            'WorkingDirectory=/opt/motility' \
+            'Environment=MOTILITY_SERVICE_API_KEY=${ApiKey}' \
+            'Environment=PUBLIC_BASE_URL=http://${MotilityEip}:8010' \
+            'Environment=PYTHONUNBUFFERED=1' \
+            'ExecStart=/root/.local/bin/uv run --group motility uvicorn backend.main:app --host 0.0.0.0 --port 8010' \
+            'Restart=always' \
+            'RestartSec=5' \
+            '' \
+            '[Install]' \
+            'WantedBy=multi-user.target' \
+            > /etc/systemd/system/motility.service
+
+          systemctl daemon-reload
+          systemctl enable --now motility
+      Tags:
+        - Key: Name
+          Value: spermmatch-motility
+
+  MotilityEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref MotilityInstance
+      EIP: !Ref MotilityEip
+
+Outputs:
+  MotilityServiceUrl:
+    Description: Set this as MOTILITY_SERVICE_URL on Vercel
+    Value: !Sub "http://${MotilityEip}:8010"
+  InstanceId:
+    Description: Stop this when not demoing to save money
+    Value: !Ref MotilityInstance
+  ElasticIp:
+    Value: !Ref MotilityEip

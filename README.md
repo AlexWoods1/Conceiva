@@ -37,9 +37,30 @@ Set these in the Vercel project environment:
 | `SEED_ON_EMPTY` | Optional | Default `true`. Demo accounts upsert if missing. |
 | `STRIPE_*` | Leave unset | Matches stay free for the demo. |
 | `MOTILITY_UPLOADS_ENABLED` | Optional | Default `true`. Set `false` to hide the bank upload form. |
-| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | For live analyze | Point at the motility backend (`backend/`). Local default `http://127.0.0.1:8010`. |
+| `MOTILITY_SERVICE_URL` / `MOTILITY_SERVICE_API_KEY` | For live analyze | **Required on Vercel** when uploads are on. Must be the public EC2 URL (not localhost). |
 
 SQLite on Vercel lives under `/tmp`. Data can reset when instances recycle. Demo logins are shared across judges.
+
+Vercel `maxDuration` is **300s** so the app can wait for YOLO (1–2 min). That needs a Vercel plan that allows 300s function duration.
+
+## Motility on AWS (cheap public host)
+
+Remote bank uploads need a public motility service. This repo ships a **single t3.small EC2** stack (no ALB, ~$15/mo while running; stop it between demos).
+
+From the repo root (AWS CLI required; **no local Docker** — EC2 installs CPU torch from an S3 source pack):
+
+```powershell
+.\infra\motility\deploy.ps1
+```
+
+Copy the printed `MOTILITY_SERVICE_URL` and `MOTILITY_SERVICE_API_KEY` into the Vercel project env, then redeploy the app. First boot takes ~5–15 minutes while torch installs.
+
+```powershell
+.\infra\motility\deploy.ps1 -Stop   # after demos
+.\infra\motility\deploy.ps1 -Start  # before the next demo
+```
+
+Smoke: `GET http://<eip>:8010/health`
 
 ## Stripe (optional couple match unlock)
 

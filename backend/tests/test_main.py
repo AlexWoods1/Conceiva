@@ -13,20 +13,21 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("MOTILITY_SERVICE_API_KEY", "test-key")
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     monkeypatch.chdir(tmp_path)
     import backend.main as main
 
     importlib.reload(main)  # re-run module-level OUT_DIR/API_KEY setup under tmp_path
-    monkeypatch.setattr(
-        main,
-        "analyze_video",
-        lambda video_path, out_dir: {
+
+    def _fake_analyze(_video_path, out_dir):
+        return {
             "summary": {"total_motility_percent": 50.0},
             "annotated_video_path": f"{out_dir}/tracked.mp4",
             "who_reference": {},
             "disclaimer": "test",
-        },
-    )
+        }
+
+    monkeypatch.setattr(main, "_load_analyze_video", lambda: _fake_analyze)
     (tmp_path / "out" / "requests").mkdir(parents=True, exist_ok=True)
     return TestClient(main.app)
 
@@ -59,7 +60,39 @@ def test_accepts_requests_with_the_right_api_key(client):
         files={"video": ("a.mp4", b"x", "video/mp4")},
     )
     assert response.status_code == 200
-    assert response.json()["summary"]["total_motility_percent"] == 50.0
+    body = response.json()
+    assert body["summary"]["total_motility_percent"] == 50.0
+    assert body["annotated_video_url"].startswith("/videos/")
+
+
+def test_public_base_url_prefixes_annotated_video(monkeypatch, tmp_path):
+    monkeypatch.setenv("MOTILITY_SERVICE_API_KEY", "test-key")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://203.0.113.10:8010")
+    monkeypatch.chdir(tmp_path)
+    import backend.main as main
+
+    importlib.reload(main)
+
+    def _fake_analyze(_video_path, out_dir):
+        return {
+            "summary": {"total_motility_percent": 50.0},
+            "annotated_video_path": f"{out_dir}/tracked.mp4",
+            "who_reference": {},
+            "disclaimer": "test",
+        }
+
+    monkeypatch.setattr(main, "_load_analyze_video", lambda: _fake_analyze)
+    (tmp_path / "out" / "requests").mkdir(parents=True, exist_ok=True)
+    client = TestClient(main.app)
+    response = client.post(
+        "/analyze",
+        headers={"X-Api-Key": "test-key"},
+        files={"video": ("a.mp4", b"x", "video/mp4")},
+    )
+    assert response.status_code == 200
+    assert response.json()["annotated_video_url"].startswith(
+        "http://203.0.113.10:8010/videos/"
+    )
 
 
 def test_rejects_an_oversized_upload_and_cleans_up(client, tmp_path):
