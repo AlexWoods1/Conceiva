@@ -5,6 +5,7 @@ from app.constants import (
     CMV_UNKNOWN_PENALTY,
     FAMILY_LIMIT_PENALTY,
     ID_RELEASE_PENALTY,
+    MOTILITY_PENALTY,
     QUARANTINE_PENALTY,
 )
 from app.matching import (
@@ -158,3 +159,15 @@ def test_rank_results_puts_clear_matches_ahead_of_hard_stops():
     ordered = [code for code, _result in rank_results(rows)]
 
     assert ordered == ["DN-3", "DN-1", "DN-2", "DN-9"]
+
+
+def test_motility_below_reference_penalizes_without_a_hard_stop():
+    baseline = score_match(_couple(), _prefs(), _donor())
+    flagged = score_match(_couple(), _prefs(), _donor(motility_below_reference=True))
+
+    assert flagged.score == baseline.score - MOTILITY_PENALTY
+    # A research-demo measurement must never hard-stop a donor on its own.
+    assert flagged.hard_stop is False
+    assert any(
+        reason.field == "donor.motility_below_reference" for reason in flagged.reasons
+    )

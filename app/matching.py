@@ -15,6 +15,7 @@ from app.constants import (
     CONFIRMED_CARRIER,
     FAMILY_LIMIT_PENALTY,
     ID_RELEASE_PENALTY,
+    MOTILITY_PENALTY,
     QUARANTINE_PENALTY,
 )
 
@@ -62,6 +63,7 @@ class DonorOffer:
     quarantine: str
     family_limit: int
     id_release_policy: str
+    motility_below_reference: bool = False
 
 
 @dataclass
@@ -231,6 +233,21 @@ def score_match(
                 field="donor.quarantine",
                 value=donor.quarantine,
                 text="The donor is still in quarantine on the bank survey.",
+            )
+        )
+
+    if donor.motility_below_reference:
+        score -= MOTILITY_PENALTY
+        reasons.append(
+            Reason(
+                kind="survey",
+                field="donor.motility_below_reference",
+                value="below_reference",
+                text=(
+                    "The motility analysis for this donor came back below the WHO "
+                    "lower reference limits. This is a research-demo measurement, "
+                    "not a clinical semen analysis."
+                ),
             )
         )
 

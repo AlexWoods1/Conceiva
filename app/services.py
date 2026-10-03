@@ -153,6 +153,7 @@ def score_donor_for_couple(
         quarantine=donor.quarantine,
         family_limit=donor.family_limit,
         id_release_policy=donor.id_release_policy,
+        motility_below_reference=donor.motility_below_reference,
     )
     return score_match(person, prefs, offer, face_score=face)
 

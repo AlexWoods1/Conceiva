@@ -61,6 +61,9 @@ ID_RELEASE_PENALTY = 15
 CMV_PENALTY = 15
 CMV_UNKNOWN_PENALTY = 8
 QUARANTINE_PENALTY = 25
+# * Motility below the WHO lower reference limits. A soft penalty, like
+# * quarantine -- a research-demo measurement must not hard-stop a donor.
+MOTILITY_PENALTY = 20
 
 # * WHO laboratory manual, 6th edition, lower reference limits -- for display
 # * alongside a motility result, not used in matching.

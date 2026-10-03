@@ -979,8 +979,15 @@ async def donor_motility_upload(request: Request, donor_id: int):
     donor.motility_total_pct = result["summary"]["total_motility_percent"]
     donor.motility_progressive_pct = result["summary"]["percent_progressive"]
     donor.motility_video_url = result["annotated_video_url"]
+    donor.motility_below_reference = (
+        donor.motility_total_pct < WHO_TOTAL_MOTILITY_MIN_PCT
+        or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
+    )
     db.commit()
-    _flash(request, "Motility result saved.")
+    if donor.motility_below_reference:
+        _flash(request, "Motility result saved. Below WHO reference limits.")
+    else:
+        _flash(request, "Motility result saved.")
     return _redirect(f"/bank/donors/{donor.id}")
 
 
