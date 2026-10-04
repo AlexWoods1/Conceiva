@@ -1217,7 +1217,7 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
   .doors, .how-steps, .guide-grid { grid-template-columns: 1fr 1fr; }
 }
 
-/* * "It's a match" dialog on the swipe deck. */
+/* * "It's a match" dialog on the match list. */
 .match-modal {
   position: fixed;
   z-index: 200;
@@ -1271,7 +1271,7 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
   box-shadow: 0 6px 14px rgba(220, 34, 146, 0.4);
 }
 
-/* * Swipe deck */
+/* * Match list */
 .deck-page { display: grid; gap: 1.1rem; }
 .page-deck {
   overflow-x: clip;
@@ -1298,27 +1298,6 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
   gap: 0.5rem;
   align-items: center;
 }
-
-.view-toggle {
-  display: inline-flex;
-  padding: 3px;
-  border-radius: 999px;
-  background: #ece7dc;
-}
-
-.view-toggle[hidden] { display: none; }
-
-.view-toggle button {
-  padding: 0.35rem 0.9rem;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 0.9rem;
-}
-
-.view-toggle button:hover { background: transparent; color: var(--ink); }
-.view-toggle button[aria-pressed="true"] { background: white; color: var(--teal-deep); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1); }
 
 .filter-drawer {
   border: 1px solid var(--line);
@@ -1362,14 +1341,13 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
 .trait-filters select { width: 9rem; }
 .filter-actions { display: flex; gap: 0.9rem; align-items: center; }
 
-/* * Without JS, or in list view, the deck is a responsive grid. */
 .deck {
   display: grid;
   gap: 1.25rem;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
 }
 
-.swipe-card {
+.match-tile {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1377,13 +1355,9 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
   overflow: hidden;
   background: var(--card);
   box-shadow: var(--shadow);
-  user-select: none;
-  --like: 0;
-  --nope: 0;
 }
 
-.swipe-card.is-dismissed { display: none; }
-.swipe-card.is-blocked { outline: 3px solid var(--coral); outline-offset: -3px; }
+.match-tile.is-blocked { outline: 3px solid var(--coral); outline-offset: -3px; }
 
 .card-photos {
   position: relative;
@@ -1536,27 +1510,8 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
   font-size: 0.92rem;
 }
 
-.stamp {
-  position: absolute;
-  z-index: 4;
-  top: 48px;
-  padding: 0.25rem 0.8rem;
-  border: 4px solid currentColor;
-  border-radius: 10px;
-  font-size: 1.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  pointer-events: none;
-  opacity: 0;
-}
-
-.stamp-like { left: 18px; color: #6bd36b; transform: rotate(-14deg); opacity: var(--like); }
-.stamp-nope { right: 18px; color: var(--coral); transform: rotate(14deg); opacity: var(--nope); }
-
 .card-body {
   padding: 1rem 1.15rem 0.5rem;
-  user-select: text;
 }
 
 .card-body-title { margin: 0 0 0.6rem; font-family: var(--font-display); font-weight: 400; font-size: 1.25rem; }
@@ -1607,7 +1562,6 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.action[hidden] { display: none; }
 .action:hover { transform: scale(1.08); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16); }
 .action-nope { color: var(--coral); }
 .action-nope:hover { background: var(--coral-soft); }
@@ -1624,109 +1578,6 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
 }
 
 .action-info:hover { background: var(--lavender-soft); }
-
-.deck-empty {
-  grid-column: 1 / -1;
-  display: grid;
-  justify-items: center;
-  gap: 0.5rem;
-  padding: 2.5rem 1.5rem;
-  border-radius: 26px;
-  background: var(--card);
-  box-shadow: var(--shadow);
-  text-align: center;
-}
-
-.deck-empty[hidden] { display: none; }
-.deck-empty h2 { margin: 0; color: var(--teal-deep); }
-.deck-empty-icon { margin: 0; font-size: 2.5rem; color: var(--lavender); }
-
-.deck-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem 1.25rem;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.deck-footer[hidden] { display: none; }
-.deck-counter { font-weight: 700; color: var(--teal-deep); }
-
-/* * Card view: cards stack in one stage, only the top one is interactive. */
-.deck.is-stacked {
-  --card-w: max(240px, min(400px, calc(100vw - 2.5rem), calc((100vh - 190px) * 0.75)));
-  display: block;
-  position: relative;
-  width: var(--card-w);
-  height: calc(var(--card-w) * 4 / 3 + 96px);
-  margin: 0.5rem auto 0;
-}
-
-.deck.is-stacked .swipe-card {
-  position: absolute;
-  inset: 0;
-  transform-origin: 50% 100%;
-  transform: translateY(calc(var(--pos) * 12px)) scale(calc(1 - var(--pos) * 0.04));
-  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease;
-}
-
-.deck.is-stacked .swipe-card:not(.is-top) { pointer-events: none; }
-.deck.is-stacked .swipe-card:not(.is-top) .card-overlay,
-.deck.is-stacked .swipe-card:not(.is-top) .card-actions { visibility: hidden; }
-.deck.is-stacked .swipe-card.is-hidden-deep { opacity: 0; }
-.deck.is-stacked .swipe-card.is-dragging { transition: none; cursor: grabbing; }
-.deck.is-stacked .is-top .card-photos { cursor: grab; touch-action: pan-y; }
-
-.deck.is-stacked .swipe-card.is-gone-right {
-  transform: translate(140%, -30px) rotate(24deg) !important;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.deck.is-stacked .swipe-card.is-gone-left {
-  transform: translate(-140%, -30px) rotate(-24deg) !important;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.deck.is-stacked .card-photos { flex: 0 0 auto; }
-
-.deck.is-stacked .card-body {
-  position: absolute;
-  z-index: 5;
-  inset: 0 0 96px;
-  overflow-y: auto;
-  padding: 1.25rem 1.25rem 1rem;
-  background: var(--card);
-  transform: translateY(100%);
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.deck.is-stacked .swipe-card.is-expanded .card-body {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.deck.is-stacked .swipe-card.is-expanded .action-info { background: var(--lavender); color: white; }
-
-.deck.is-stacked .card-actions {
-  position: absolute;
-  inset: auto 0 0;
-  height: 96px;
-  padding: 0 1rem;
-  background: var(--card);
-}
-
-.deck.is-stacked .deck-empty {
-  position: absolute;
-  inset: 0;
-  align-content: center;
-}
 
 .toast {
   position: fixed;
@@ -1747,7 +1598,7 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
 .toast[data-tone="error"] { background: var(--stop); }
 
 @media (max-width: 640px) {
-  .deck-keys { display: none; }
+  .match-modal-card { width: min(100%, 22rem); padding: 1.5rem 1.1rem 1.25rem; }
 }
 
 /* * Match detail / donor profile */
@@ -2496,9 +2347,7 @@ a.button.button-white:hover { background: var(--magenta-soft); border-color: var
 
   .door,
   .visit-item,
-  .action,
-  .deck.is-stacked .swipe-card,
-  .deck.is-stacked .card-body { transition: none; }
+  .action { transition: none; }
 
   .door:hover { transform: none; }
 }
