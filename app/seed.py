@@ -213,7 +213,11 @@ def _ensure_demo_couple_intake(db: Session, couple_id: int) -> None:
 
 
 def _ensure_demo_visit(db: Session, couple: User, counselor: User) -> None:
-    """Shortlist DN-100/DN-240 and book a demo visit for the counselor walkthrough."""
+    """Shortlist DN-100/DN-240 and book a demo visit for the counselor walkthrough.
+
+    Never recreates a visit after cancel. Cold starts call this again on Vercel;
+    re-booking here made cancel look broken.
+    """
     donors = {
         donor.code: donor
         for donor in db.scalars(
@@ -226,14 +230,19 @@ def _ensure_demo_visit(db: Session, couple: User, counselor: User) -> None:
         return
     for donor in (dn100, dn240):
         add_to_shortlist(db, couple.id, donor.id)
-    booked = db.scalars(
-        select(Appointment).where(
+    existing = db.scalars(
+        select(Appointment)
+        .where(
             Appointment.couple_user_id == couple.id,
             Appointment.counselor_user_id == counselor.id,
-            Appointment.status == APPOINTMENT_BOOKED,
         )
+        .order_by(Appointment.id)
     ).first()
-    if booked is None:
+    if existing is not None:
+        if existing.status != APPOINTMENT_BOOKED:
+            return
+        booked = existing
+    else:
         slot = db.scalars(
             select(AvailabilitySlot)
             .where(AvailabilitySlot.counselor_user_id == counselor.id)

@@ -104,9 +104,10 @@ def test_seed_demo_backfills_couple_intake_on_existing_demo(db):
 
 
 def test_seed_demo_books_counselor_visit_with_matchable_candidates(db):
-    from app.services import resolve_visit_donors, score_donor_for_couple
-    from app.config import Settings
     from pathlib import Path
+
+    from app.config import Settings
+    from app.services import resolve_visit_donors, score_donor_for_couple
 
     seed_demo(db)
     db.commit()
@@ -140,9 +141,29 @@ def test_seed_demo_books_counselor_visit_with_matchable_candidates(db):
         enable_face_compare=False,
         seed_on_empty=False,
     )
-    by_code = {donor.code: score_donor_for_couple(db, couple, donor, settings) for donor in donors}
+    by_code = {
+        donor.code: score_donor_for_couple(db, couple, donor, settings)
+        for donor in donors
+    }
     assert by_code["DN-240"].hard_stop is True
     assert by_code["DN-100"].hard_stop is False
+
+
+def test_seed_demo_does_not_rebook_after_cancel(db):
+    from app.services import cancel_appointment
+
+    seed_demo(db)
+    db.commit()
+    appointment = db.scalars(select(Appointment)).one()
+    assert cancel_appointment(db, appointment) is None
+    db.commit()
+
+    seed_demo(db)
+    db.commit()
+    db.refresh(appointment)
+
+    assert appointment.status == "cancelled"
+    assert list(db.scalars(select(Appointment))) == [appointment]
 
 
 def test_seed_demo_marks_couple_paid_and_creates_future_slots(db):
