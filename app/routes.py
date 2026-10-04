@@ -36,6 +36,10 @@ from app.constants import (
     MAX_MOTILITY_UPLOAD_BYTES,
     MAX_SHORTLIST,
     MOTILITY_DISCLAIMER,
+    MOTILITY_METRIC_HELP,
+    MOTILITY_REVIEW_LABELS,
+    MOTILITY_SAMPLE_TIMING,
+    MOTILITY_SAMPLE_TIMING_LABELS,
     PHOTO_KEYS,
     QUARANTINE,
     QUARANTINE_LABELS,
@@ -62,6 +66,7 @@ from app.models import (
     Carrier,
     ContactMessage,
     Donor,
+    MotilitySample,
     User,
 )
 from app.motility_client import MotilityServiceError, analyze_donor_video
@@ -881,6 +886,375 @@ def bank_home(request: Request):
     return _render(request, "bank.html", user, donors=donors)
 
 
+def _named_clip(form, name: str):
+    """Return an uploaded file, or None when that side was left empty."""
+    item = form.get(name)
+    if item is None or not getattr(item, "filename", ""):
+        return None
+    return item
+
+
+def _motility_uploads(form) -> list[tuple[str, object]] | str:
+    """Pair each uploaded clip with fresh or post_thaw.
+
+    A single field named video, with no side chosen, stays the after-thaw clip
+    so older clients keep working.
+    """
+    fresh = _named_clip(form, "fresh_video")
+    thawed = _named_clip(form, "thaw_video")
+    clips: list[tuple[str, object]] = []
+    if fresh is not None:
+        clips.append(("fresh", fresh))
+    if thawed is not None:
+        clips.append(("post_thaw", thawed))
+    if clips:
+        return clips
+    legacy = _named_clip(form, "video")
+    if legacy is None:
+        return (
+            "Choose a microscope clip for the pre-freeze sample, the "
+            "post-thaw sample, or both."
+        )
+    timing = str(form.get("sample_timing", "post_thaw") or "post_thaw")
+    if timing not in MOTILITY_SAMPLE_TIMING:
+        return "Say whether this clip is pre-freeze or post-thaw."
+    return [(timing, legacy)]
+
+
+def _optional_summary_float(summary: dict, key: str) -> float | None:
+    """Return a float from the analyzer summary, or None when it is absent."""
+    value = summary.get(key)
+    if value is None or value == "":
+        return None
+    return float(value)
+
+
+def _optional_summary_int(summary: dict, key: str) -> int | None:
+    """Return an int from the analyzer summary, or None when it is absent."""
+    value = summary.get(key)
+    if value is None or value == "":
+        return None
+    return int(value)
+
+
+def _motility_change_phrase(change_points: float) -> str:
+    """Plain description of how progressive motility moved after freezing."""
+    if change_points < -0.05:
+        return f"down {abs(change_points):.1f} percentage points"
+    if change_points > 0.05:
+        return f"up {change_points:.1f} percentage points"
+    return "unchanged"
+
+
+def _motility_split(summary: dict) -> dict[str, float | int | bool | None]:
+    """Read the analyzer summary, filling the split when a field is omitted.
+
+    Kinematic fields are stored only when the summary includes them. VAP,
+    STR, WOB, and LIN are not in that summary, so they are not stored.
+    """
+    total = float(summary["total_motility_percent"])
+    progressive = float(summary["percent_progressive"])
+    non_progressive = summary.get("percent_non_progressive")
+    immotile = summary.get("percent_immotile")
+    tracks = summary.get("num_tracks_analyzed")
+    scale = summary.get("scale_is_approximate")
+    return {
+        "total_pct": total,
+        "progressive_pct": progressive,
+        "non_progressive_pct": (
+            float(non_progressive) if non_progressive is not None else total - progressive
+        ),
+        "immotile_pct": float(immotile) if immotile is not None else 100.0 - total,
+        "track_count": int(tracks) if tracks is not None else None,
+        "mean_vcl": _optional_summary_float(summary, "mean_vcl"),
+        "mean_vsl": _optional_summary_float(summary, "mean_vsl"),
+        "fps": _optional_summary_float(summary, "fps"),
+        "scale_is_approximate": None if scale is None else bool(scale),
+        "cluster_count": _optional_summary_int(summary, "cluster_count"),
+    }
+
+
+def _mirror_motility(donor: Donor, timing: str, numbers: dict, video_url: str) -> None:
+    """Keep the couple-facing donor columns on the clip just saved.
+
+    Matching still reads one snapshot. A bank page that has both clips uses
+    the motility_samples rows, not these columns.
+    """
+    donor.motility_total_pct = numbers["total_pct"]
+    donor.motility_progressive_pct = numbers["progressive_pct"]
+    donor.motility_non_progressive_pct = numbers["non_progressive_pct"]
+    donor.motility_immotile_pct = numbers["immotile_pct"]
+    donor.motility_track_count = numbers["track_count"]
+    donor.motility_sample_timing = timing
+    donor.motility_video_url = video_url
+    donor.motility_below_reference = (
+        numbers["total_pct"] < WHO_TOTAL_MOTILITY_MIN_PCT
+        or numbers["progressive_pct"] < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
+    )
+
+
+def _save_motility_sample(
+    db: Session, donor: Donor, timing: str, numbers: dict, video_url: str
+) -> MotilitySample:
+    """Insert or replace the fresh or after-thaw clip without touching the other."""
+    sample = db.scalars(
+        select(MotilitySample).where(
+            MotilitySample.donor_id == donor.id, MotilitySample.timing == timing
+        )
+    ).first()
+    if sample is None:
+        sample = MotilitySample(donor_id=donor.id, timing=timing)
+        db.add(sample)
+    sample.total_pct = numbers["total_pct"]
+    sample.progressive_pct = numbers["progressive_pct"]
+    sample.non_progressive_pct = numbers["non_progressive_pct"]
+    sample.immotile_pct = numbers["immotile_pct"]
+    sample.track_count = numbers["track_count"]
+    sample.video_url = video_url
+    sample.mean_vcl = numbers.get("mean_vcl")
+    sample.mean_vsl = numbers.get("mean_vsl")
+    sample.fps = numbers.get("fps")
+    sample.scale_is_approximate = numbers.get("scale_is_approximate")
+    sample.cluster_count = numbers.get("cluster_count")
+    donor.motility_review_status = "awaiting_review"
+    _mirror_motility(donor, timing, numbers, video_url)
+    return sample
+
+
+def _backfill_motility_sample(db: Session, donor: Donor) -> None:
+    """Copy an older single result into the side it was labeled with."""
+    if donor.motility_total_pct is None:
+        return
+    if donor.motility_sample_timing not in MOTILITY_SAMPLE_TIMING:
+        return
+    existing = db.scalars(
+        select(MotilitySample.id).where(
+            MotilitySample.donor_id == donor.id,
+            MotilitySample.timing == donor.motility_sample_timing,
+        )
+    ).first()
+    if existing is not None:
+        return
+    total = donor.motility_total_pct
+    progressive = donor.motility_progressive_pct
+    if progressive is None:
+        return
+    non_progressive = donor.motility_non_progressive_pct
+    immotile = donor.motility_immotile_pct
+    db.add(
+        MotilitySample(
+            donor_id=donor.id,
+            timing=donor.motility_sample_timing,
+            total_pct=total,
+            progressive_pct=progressive,
+            non_progressive_pct=(
+                non_progressive
+                if non_progressive is not None
+                else total - progressive
+            ),
+            immotile_pct=immotile if immotile is not None else 100.0 - total,
+            track_count=donor.motility_track_count,
+            video_url=donor.motility_video_url,
+        )
+    )
+    db.commit()
+
+
+def _motility_comparison(
+    fresh: MotilitySample | None, thawed: MotilitySample | None
+) -> dict[str, float | str] | None:
+    """Progressive motility retention is post-thaw progressive divided by pre-freeze.
+
+    The ratio compares the two samples. It is not evidence that the same
+    sperm cells survived freezing. It is omitted when pre-freeze progressive
+    motility is zero.
+    """
+    if fresh is None or thawed is None:
+        return None
+    if fresh.progressive_pct is None or thawed.progressive_pct is None:
+        return None
+    change = thawed.progressive_pct - fresh.progressive_pct
+    comparison: dict[str, float | str] = {
+        "fresh_progressive": fresh.progressive_pct,
+        "thaw_progressive": thawed.progressive_pct,
+        "change_points": change,
+        "fresh_label": f"{fresh.progressive_pct:.1f}%",
+        "thaw_label": f"{thawed.progressive_pct:.1f}%",
+        "change_label": f"{change:+.1f} percentage points",
+    }
+    if fresh.progressive_pct > 0:
+        retention = thawed.progressive_pct / fresh.progressive_pct * 100.0
+        comparison["retention_pct"] = retention
+        comparison["retention_label"] = f"{retention:.1f}%"
+    return comparison
+
+
+def _fmt_metric(value: float | int | None, formatter) -> str:
+    """Format a stored metric, or an em dash when this clip has no value."""
+    if value is None:
+        return "—"
+    return formatter(value)
+
+
+def _metric_cell(sample: MotilitySample | None, attr: str, formatter) -> str:
+    if sample is None:
+        return "—"
+    return _fmt_metric(getattr(sample, attr), formatter)
+
+
+def _metric_row(
+    key: str,
+    label: str,
+    fresh: MotilitySample | None,
+    thawed: MotilitySample | None,
+    attr: str,
+    formatter,
+    fresh_below: bool = False,
+) -> dict:
+    return {
+        "kind": "metric",
+        "key": key,
+        "label": label,
+        "tip": MOTILITY_METRIC_HELP[key],
+        "fresh": _metric_cell(fresh, attr, formatter),
+        "thaw": _metric_cell(thawed, attr, formatter),
+        "fresh_below": fresh_below,
+    }
+
+
+def _motility_rows(
+    fresh: MotilitySample | None, thawed: MotilitySample | None
+) -> list[dict]:
+    """Comparison rows limited to fields the analyzer actually returns."""
+    pct = lambda value: f"{value:.1f}%"
+    speed = lambda value: f"{value:.1f}"
+    count = lambda value: str(int(value))
+    fresh_below = (
+        fresh is not None
+        and fresh.progressive_pct is not None
+        and fresh.progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
+    )
+    return [
+        {"kind": "group", "label": "Motility"},
+        _metric_row(
+            "progressive",
+            "Progressive motility",
+            fresh,
+            thawed,
+            "progressive_pct",
+            pct,
+            fresh_below=fresh_below,
+        ),
+        _metric_row(
+            "non_progressive",
+            "Non-progressive motility",
+            fresh,
+            thawed,
+            "non_progressive_pct",
+            pct,
+        ),
+        _metric_row("immotile", "Immotile", fresh, thawed, "immotile_pct", pct),
+        _metric_row(
+            "total", "Total motility", fresh, thawed, "total_pct", pct
+        ),
+        _metric_row(
+            "tracks", "Tracks analyzed", fresh, thawed, "track_count", count
+        ),
+        {"kind": "group", "label": "Kinematics"},
+        _metric_row(
+            "vcl", "Mean VCL (µm/s)", fresh, thawed, "mean_vcl", speed
+        ),
+        _metric_row(
+            "vsl", "Mean VSL (µm/s)", fresh, thawed, "mean_vsl", speed
+        ),
+    ]
+
+
+def _quality_rows(
+    fresh: MotilitySample | None, thawed: MotilitySample | None
+) -> list[dict]:
+    """Quality fields the summary includes. Duration and frame count are absent."""
+    count = lambda value: str(int(value))
+    fps = lambda value: f"{value:.2f}"
+    rows = [
+        _metric_row(
+            "tracks", "Tracks analyzed", fresh, thawed, "track_count", count
+        ),
+        _metric_row("fps", "Frame rate (fps)", fresh, thawed, "fps", fps),
+    ]
+    if any(
+        sample is not None and sample.cluster_count is not None
+        for sample in (fresh, thawed)
+    ):
+        rows.append(
+            _metric_row(
+                "clusters",
+                "Cluster tracks excluded",
+                fresh,
+                thawed,
+                "cluster_count",
+                count,
+            )
+        )
+    return rows
+
+
+def _review_status(donor: Donor, has_analysis: bool) -> str:
+    if not has_analysis:
+        return "none"
+    status = (donor.motility_review_status or "").strip()
+    if status not in {"awaiting_review", "accepted", "flagged"}:
+        return "awaiting_review"
+    return status
+
+
+def _motility_sides(db: Session, donor: Donor | None) -> dict:
+    """Pre-freeze clip, post-thaw clip, and the change between them."""
+    if donor is None or donor.id is None:
+        return {
+            "motility_fresh": None,
+            "motility_thaw": None,
+            "motility_comparison": None,
+            "motility_untimed": False,
+            "motility_rows": _motility_rows(None, None),
+            "motility_quality_rows": _quality_rows(None, None),
+            "motility_scale_is_approximate": False,
+            "motility_has_analysis": False,
+            "motility_review_status": "none",
+            "motility_review_label": MOTILITY_REVIEW_LABELS["none"],
+        }
+    _backfill_motility_sample(db, donor)
+    rows = list(
+        db.scalars(select(MotilitySample).where(MotilitySample.donor_id == donor.id))
+    )
+    by_timing = {row.timing: row for row in rows}
+    fresh = by_timing.get("fresh")
+    thawed = by_timing.get("post_thaw")
+    has_analysis = fresh is not None or thawed is not None
+    status = _review_status(donor, has_analysis)
+    untimed = (
+        donor.motility_total_pct is not None
+        and fresh is None
+        and thawed is None
+        and donor.motility_sample_timing not in MOTILITY_SAMPLE_TIMING
+    )
+    return {
+        "motility_fresh": fresh,
+        "motility_thaw": thawed,
+        "motility_comparison": _motility_comparison(fresh, thawed),
+        "motility_untimed": untimed,
+        "motility_rows": _motility_rows(fresh, thawed),
+        "motility_quality_rows": _quality_rows(fresh, thawed),
+        "motility_scale_is_approximate": any(
+            sample is not None and sample.scale_is_approximate is True
+            for sample in (fresh, thawed)
+        ),
+        "motility_has_analysis": has_analysis,
+        "motility_review_status": status,
+        "motility_review_label": MOTILITY_REVIEW_LABELS[status],
+    }
+
+
 def _donor_page(
     request: Request,
     user: User,
@@ -903,10 +1277,13 @@ def _donor_page(
         error=error,
         blood_types=BLOOD_TYPES,
         rh_values=RH_VALUES,
+        rh_labels=RH_LABELS,
         photo_keys=PHOTO_KEYS,
         baby_photo_keys=BABY_PHOTO_KEYS,
         cmv_status=CMV_STATUS,
+        cmv_status_labels=CMV_STATUS_LABELS,
         quarantine=QUARANTINE,
+        quarantine_labels=QUARANTINE_LABELS,
         id_release=ID_RELEASE,
         zygosities=ZYGOSITIES,
         hair_colors=HAIR_COLORS,
@@ -920,6 +1297,8 @@ def _donor_page(
         who_total_min=WHO_TOTAL_MOTILITY_MIN_PCT,
         motility_disclaimer=MOTILITY_DISCLAIMER,
         motility_uploads_enabled=request.app.state.settings.motility_uploads_enabled,
+        motility_timing_labels=MOTILITY_SAMPLE_TIMING_LABELS,
+        **_motility_sides(_db(request), donor),
     )
 
 
@@ -1093,38 +1472,111 @@ async def donor_motility_upload(request: Request, donor_id: int):
             ),
             status_code=503,
         )
-    video = form.get("video")
-    if video is None or not getattr(video, "filename", ""):
-        return _donor_page(
-            request, user, donor, error="Choose a video file.", status_code=400
+    clips = _motility_uploads(form)
+    if isinstance(clips, str):
+        return _donor_page(request, user, donor, error=clips, status_code=400)
+    # analyze_donor_video() blocks on a synchronous HTTP call for about a
+    # minute per clip. Called directly, that freezes this single-threaded
+    # event loop. run_in_threadpool moves it off the loop.
+    for timing, video in clips:
+        video_bytes = await video.read()
+        try:
+            result = await run_in_threadpool(
+                analyze_donor_video, video_bytes, video.filename, settings
+            )
+        except MotilityServiceError as exc:
+            db.commit()
+            return _donor_page(
+                request, user, donor, error=exc.message, status_code=503
+            )
+        video_url = str(result.get("annotated_video_url") or "")
+        if video_url.startswith("/"):
+            video_url = f"{settings.motility_service_url}{video_url}"
+        _save_motility_sample(
+            db, donor, timing, _motility_split(result["summary"]), video_url
         )
-    video_bytes = await video.read()
-    # analyze_donor_video() blocks on a synchronous HTTP call for 1-2 minutes
-    # while the video is processed. Called directly, that freezes this
-    # single-threaded event loop -- every other request, for every user,
-    # stalls until it returns. run_in_threadpool moves it off the loop.
-    try:
-        result = await run_in_threadpool(
-            analyze_donor_video, video_bytes, video.filename, settings
-        )
-    except MotilityServiceError as exc:
-        return _donor_page(request, user, donor, error=exc.message, status_code=503)
-    donor.motility_total_pct = result["summary"]["total_motility_percent"]
-    donor.motility_progressive_pct = result["summary"]["percent_progressive"]
-    # * Service returns a path on its own host; store an absolute URL for playback.
-    video_url = str(result.get("annotated_video_url") or "")
-    if video_url.startswith("/"):
-        video_url = f"{settings.motility_service_url}{video_url}"
-    donor.motility_video_url = video_url
-    donor.motility_below_reference = (
-        donor.motility_total_pct < WHO_TOTAL_MOTILITY_MIN_PCT
-        or donor.motility_progressive_pct < WHO_PROGRESSIVE_MOTILITY_MIN_PCT
-    )
     db.commit()
-    if donor.motility_below_reference:
-        _flash(request, "Motility result saved. Below WHO reference limits.")
+    fresh = db.scalars(
+        select(MotilitySample).where(
+            MotilitySample.donor_id == donor.id, MotilitySample.timing == "fresh"
+        )
+    ).first()
+    thawed = db.scalars(
+        select(MotilitySample).where(
+            MotilitySample.donor_id == donor.id, MotilitySample.timing == "post_thaw"
+        )
+    ).first()
+    comparison = _motility_comparison(fresh, thawed)
+    if comparison is not None:
+        direction = _motility_change_phrase(comparison["change_points"])
+        _flash(
+            request,
+            (
+                "Progressive motility went from "
+                f"{comparison['fresh_progressive']:.1f}% pre-freeze to "
+                f"{comparison['thaw_progressive']:.1f}% post-thaw, {direction}."
+            ),
+        )
+    elif any(timing == "fresh" for timing, _video in clips):
+        _flash(
+            request,
+            "Pre-freeze clip saved. Add the post-thaw clip to calculate progressive motility retention.",
+        )
     else:
-        _flash(request, "Motility result saved.")
+        _flash(
+            request,
+            "Post-thaw clip saved. Add the pre-freeze clip to calculate progressive motility retention.",
+        )
+    return _redirect(f"/bank/donors/{donor.id}")
+
+
+_REVIEW_ACTIONS = {
+    "accept": "accepted",
+    "flag": "flagged",
+    "rerun": "awaiting_review",
+}
+
+
+@router.post("/bank/donors/{donor_id}/motility/review")
+async def donor_motility_review(request: Request, donor_id: int):
+    """Record a technician's review of the automated first pass."""
+    form = await _form(request)
+    try:
+        user = _require_consent(request, "bank")
+    except _RedirectNeeded as needed:
+        return _redirect(needed.path)
+    db = _db(request)
+    donor = _owned_donor(db, user.id, donor_id)
+    action = str(form.get("action") or "")
+    status = _REVIEW_ACTIONS.get(action)
+    if status is None:
+        return _donor_page(
+            request,
+            user,
+            donor,
+            error="Choose accept, flag, or re-run.",
+            status_code=400,
+        )
+    if not _motility_sides(db, donor)["motility_has_analysis"]:
+        return _donor_page(
+            request,
+            user,
+            donor,
+            error="Run an analysis before review.",
+            status_code=400,
+        )
+    donor.motility_review_status = status
+    db.commit()
+    if action == "accept":
+        _flash(request, "Analysis accepted.")
+    elif action == "flag":
+        _flash(request, "Analysis flagged for manual review.")
+    else:
+        _flash(
+            request,
+            "Marked awaiting review. Upload the microscope clips again to "
+            "re-run. The source file is not kept.",
+        )
     return _redirect(f"/bank/donors/{donor.id}")
 
 

@@ -112,51 +112,157 @@
 {% with post_url="/bank/donors/" ~ donor.id ~ "/carriers", delete_url="", form_id="donor" %}
 {% include "carrier_form.html" %}
 {% endwith %}
-<h2>Motility test</h2>
-<p class="hint">{{ motility_disclaimer }}</p>
-{% if donor.motility_total_pct is not none %}
-{% if donor.motility_below_reference %}
-<p class="motility-flag">
-  Below WHO lower reference limits. This donor carries a ranking penalty and
-  the reason is shown to couples on the match page.
-</p>
-{% endif %}
-<ul class="motility-readout">
-  <li{% if donor.motility_total_pct < who_total_min %} class="below"{% endif %}>
-    Total motility <strong>{{ "%.1f"|format(donor.motility_total_pct) }}%</strong>
-    <span class="hint">WHO lower reference {{ who_total_min }}%</span>
-  </li>
-  <li{% if donor.motility_progressive_pct < who_progressive_min %} class="below"{% endif %}>
-    Progressive <strong>{{ "%.1f"|format(donor.motility_progressive_pct) }}%</strong>
-    <span class="hint">WHO lower reference {{ who_progressive_min }}%</span>
-  </li>
-</ul>
-{% if donor.motility_video_url %}
-<video src="{{ donor.motility_video_url }}" controls width="480"></video>
-<p class="hint">
-  Each tracked sperm is drawn in its motility category: green progressive,
-  yellow non-progressive, red immotile. Colors update as a track accumulates,
-  so they settle a moment after a sperm first appears.
-</p>
-{% endif %}
-{% endif %}
-{% if motility_uploads_enabled %}
-<form method="post" action="/bank/donors/{{ donor.id }}/motility" enctype="multipart/form-data" class="stack">
-  <input type="hidden" name="csrf" value="{{ csrf }}" />
-  <label>Upload sample video <input type="file" name="video" accept="video/*" required /></label>
-  <button type="submit">Analyze motility</button>
-  <p class="hint">
-    Requires the motility backend on MOTILITY_SERVICE_URL (default
-    http://127.0.0.1:8010). Analysis takes 1-2 minutes on CPU — keep this
-    tab open until it finishes.
+<section class="lab-panel" aria-labelledby="microscopy-heading">
+  <header class="lab-head">
+    <p class="lab-kicker">Andrology lab</p>
+    <h2 id="microscopy-heading">Microscopy analysis</h2>
+    <p class="lab-lede">Software-first automated semen analysis designed as an accessible alternative to traditional CASA systems.</p>
+    <p class="lab-scope">{{ motility_disclaimer }} Conceiva runs the automated first pass. A technician reviews it.</p>
+  </header>
+  <p class="lab-specimen">
+    <strong>{{ donor.code }}</strong>
+    <span>Blood {{ donor.blood_type }}{% if donor.rh %}, {{ rh_labels.get(donor.rh, donor.rh) }}{% endif %}</span>
+    <span>{{ cmv_status_labels.get(donor.cmv, donor.cmv) }}</span>
+    <span{% if donor.quarantine == "in_quarantine" %} class="quarantine-open"{% endif %}>{{ quarantine_labels.get(donor.quarantine, donor.quarantine) }}</span>
   </p>
-</form>
-{% else %}
-<p class="hint">
-  Motility upload is off on this host. Run the app and motility backend
-  locally to analyze sample videos.
-</p>
-{% endif %}
+
+  <h3>How this works</h3>
+  <ol class="lab-steps">
+    <li>Microscope video</li>
+    <li>Sperm detection</li>
+    <li>Trajectory tracking</li>
+    <li>Motility classification</li>
+    <li>Kinematic measurements</li>
+    <li>Technician review</li>
+  </ol>
+
+  <h3>Freeze–thaw comparison</h3>
+  <div class="lab-table-wrap">
+    <table class="lab-table">
+      <thead>
+        <tr>
+          <th scope="col">Metric</th>
+          <th scope="col" class="num">Pre-freeze</th>
+          <th scope="col" class="num">Post-thaw</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in motility_rows %}
+        {% if row.kind == "group" %}
+        <tr class="lab-group"><th colspan="3" scope="colgroup">{{ row.label }}</th></tr>
+        {% else %}
+        <tr>
+          <th scope="row">
+            <span class="tip">{{ row.label }}<span class="tip-mark" tabindex="0" aria-label="About {{ row.label }}">i</span><span class="tip-bubble" role="tooltip">{{ row.tip }}</span></span>
+          </th>
+          <td class="num{% if row.fresh_below %} is-below{% endif %}" data-side="Pre-freeze">{{ row.fresh }}{% if row.fresh_below %} <span class="ref-mark">below 30%</span>{% endif %}</td>
+          <td class="num" data-side="Post-thaw">{{ row.thaw }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="lab-note">WHO 6th-edition fresh-semen lower reference limits are progressive {{ who_progressive_min }}% and total {{ who_total_min }}%. They apply to the pre-freeze clip only. They are not a post-thaw release rule. The lab decides whether the vial ships.</p>
+  {% if motility_scale_is_approximate %}
+  <p class="lab-note">VCL and VSL use an approximate pixel scale (about 0.22 µm per pixel, from an assumed 5 µm sperm head). This is not a calibrated microscope.</p>
+  {% endif %}
+
+  <h3>Progressive motility retention</h3>
+  {% if motility_comparison %}
+  <dl class="lab-stats">
+    <div>
+      <dt>Pre-freeze progressive</dt>
+      <dd>{{ motility_comparison.fresh_label }}</dd>
+    </div>
+    <div>
+      <dt>Post-thaw progressive</dt>
+      <dd>{{ motility_comparison.thaw_label }}</dd>
+    </div>
+    <div>
+      <dt>
+        <span class="tip">Progressive motility retention<span class="tip-mark" tabindex="0" aria-label="About progressive motility retention">i</span><span class="tip-bubble" role="tooltip">Post-thaw progressive motility divided by pre-freeze progressive motility. This compares the two samples. It does not show that the same individual sperm survived.</span></span>
+      </dt>
+      <dd>{% if motility_comparison.retention_label is defined %}{{ motility_comparison.retention_label }}{% else %}—{% endif %}</dd>
+    </div>
+    <div>
+      <dt>Change</dt>
+      <dd>{{ motility_comparison.change_label }}</dd>
+    </div>
+  </dl>
+  {% if motility_comparison.retention_label is not defined %}
+  <p class="lab-note">Pre-freeze progressive motility is 0%, so retention is not meaningful. The change in percentage points is still shown.</p>
+  {% endif %}
+  {% else %}
+  <p class="lab-note">Add both a pre-freeze clip and a post-thaw clip to calculate progressive motility retention.</p>
+  {% endif %}
+
+  <h3>Video review</h3>
+  <p class="lab-note">Side-by-side annotated clips. The overlay is a running classification and can change early in a track. The table uses the full track.</p>
+  <form method="post" action="/bank/donors/{{ donor.id }}/motility" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}" />
+    <div class="lab-videos">
+      {% with sample=motility_fresh, title="Pre-freeze", kicker="Before freezing", field="fresh_video", field_label="Pre-freeze clip" %}
+      {% include "motility_column.html" %}
+      {% endwith %}
+      {% with sample=motility_thaw, title="Post-thaw", kicker="After freezing", field="thaw_video", field_label="Post-thaw clip" %}
+      {% include "motility_column.html" %}
+      {% endwith %}
+    </div>
+    <ul class="clip-key">
+      <li><i class="dot dot-progressive"></i><span><strong>Progressive</strong><span>moving effectively forward</span></span></li>
+      <li><i class="dot dot-nonprogressive"></i><span><strong>Non-progressive</strong><span>moving, not effectively forward</span></span></li>
+      <li><i class="dot dot-immotile"></i><span><strong>Immotile</strong><span>no detected movement</span></span></li>
+      <li><i class="dot dot-unclassified"></i><span><strong>Unclassified</strong><span>track still under 0.5 seconds</span></span></li>
+    </ul>
+    {% if motility_uploads_enabled %}
+    <div class="lab-actions">
+      <button type="submit">Run analysis</button>
+      <p class="lab-note">About a minute per clip. Keep this tab open. Leave a side empty to keep the saved analysis for that side.</p>
+    </div>
+    {% else %}
+    <p class="lab-note">Analysis upload is off on this host. Run the app and the motility service locally.</p>
+    {% endif %}
+  </form>
+
+  <h3>Analysis quality</h3>
+  <div class="lab-table-wrap">
+    <table class="lab-table">
+      <thead>
+        <tr>
+          <th scope="col">Check</th>
+          <th scope="col" class="num">Pre-freeze</th>
+          <th scope="col" class="num">Post-thaw</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in motility_quality_rows %}
+        <tr>
+          <th scope="row">
+            <span class="tip">{{ row.label }}<span class="tip-mark" tabindex="0" aria-label="About {{ row.label }}">i</span><span class="tip-bubble" role="tooltip">{{ row.tip }}</span></span>
+          </th>
+          <td class="num" data-side="Pre-freeze">{{ row.fresh }}</td>
+          <td class="num" data-side="Post-thaw">{{ row.thaw }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="lab-note">Video duration, frames analyzed, and average track duration are not in the analyzer result, so they are not shown.</p>
+
+  <h3>Technician review</h3>
+  <p class="lab-status-line">
+    <span>Analysis status</span>
+    <strong class="lab-status lab-status-{{ motility_review_status }}">{{ motility_review_label }}</strong>
+  </p>
+  <form method="post" action="/bank/donors/{{ donor.id }}/motility/review" class="lab-review">
+    <input type="hidden" name="csrf" value="{{ csrf }}" />
+    <button type="submit" name="action" value="accept" {% if not motility_has_analysis %}disabled{% endif %}>Accept analysis</button>
+    <button type="submit" name="action" value="flag" class="button-ghost" {% if not motility_has_analysis %}disabled{% endif %}>Flag for manual review</button>
+    <button type="submit" name="action" value="rerun" class="button-ghost" {% if not motility_has_analysis %}disabled{% endif %}>Re-run</button>
+  </form>
+  <p class="lab-note">Accept records that a technician reviewed this first pass. Flag holds it for a manual look. Re-run does not repeat the video by itself: upload the clips again. The source file is not stored after analysis.</p>
+</section>
 <form method="post" action="/bank/donors/{{ donor.id }}/delete">
   <input type="hidden" name="csrf" value="{{ csrf }}" />
   <button type="submit" class="danger">Delete donor</button>

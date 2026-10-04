@@ -111,6 +111,13 @@ class Donor(Base):
     motility_progressive_pct: Mapped[float | None] = mapped_column(Float, default=None)
     motility_video_url: Mapped[str] = mapped_column(String(255), default="")
     motility_below_reference: Mapped[bool] = mapped_column(default=False)
+    motility_non_progressive_pct: Mapped[float | None] = mapped_column(
+        Float, default=None
+    )
+    motility_immotile_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    motility_track_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    motility_sample_timing: Mapped[str] = mapped_column(String(16), default="")
+    motility_review_status: Mapped[str] = mapped_column(String(32), default="")
     hair_color: Mapped[str] = mapped_column(String(16), default="")
     hair_type: Mapped[str] = mapped_column(String(16), default="")
     eye_color: Mapped[str] = mapped_column(String(16), default="")
@@ -125,6 +132,30 @@ class Donor(Base):
             return None
         meters = self.height_cm / 100
         return round(self.weight_kg / (meters * meters), 1)
+
+
+class MotilitySample(Base):
+    """One microscope clip for a donor: pre-freeze, or the same sample after thaw."""
+
+    __tablename__ = "motility_samples"
+    __table_args__ = (
+        UniqueConstraint("donor_id", "timing", name="uq_motility_sample_donor_timing"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    donor_id: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
+    timing: Mapped[str] = mapped_column(String(16))
+    total_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    progressive_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    non_progressive_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    immotile_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    track_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    video_url: Mapped[str] = mapped_column(String(255), default="")
+    mean_vcl: Mapped[float | None] = mapped_column(Float, default=None)
+    mean_vsl: Mapped[float | None] = mapped_column(Float, default=None)
+    fps: Mapped[float | None] = mapped_column(Float, default=None)
+    scale_is_approximate: Mapped[bool | None] = mapped_column(default=None)
+    cluster_count: Mapped[int | None] = mapped_column(Integer, default=None)
 
 
 class Carrier(Base):

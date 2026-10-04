@@ -81,7 +81,48 @@ MOTILITY_PENALTY = 20
 WHO_PROGRESSIVE_MOTILITY_MIN_PCT = 30
 WHO_TOTAL_MOTILITY_MIN_PCT = 42
 MAX_MOTILITY_UPLOAD_BYTES = 200 * 1024 * 1024  # a 30s microscopy clip is a few MB
+# * Banks usually check a thawed drop. Fresh is the other clip this form accepts.
+MOTILITY_SAMPLE_TIMING = ("post_thaw", "fresh")
+MOTILITY_SAMPLE_TIMING_LABELS = {
+    "post_thaw": "Post-thaw",
+    "fresh": "Pre-freeze",
+}
+MOTILITY_REVIEW_LABELS = {
+    "none": "No analysis yet",
+    "awaiting_review": "Awaiting review",
+    "accepted": "Accepted",
+    "flagged": "Flagged for manual review",
+}
+# * Short definitions for the lab page. Only metrics the analyzer returns.
+MOTILITY_METRIC_HELP = {
+    "progressive": "Percent of analyzed tracks moving effectively forward.",
+    "non_progressive": (
+        "Percent of analyzed tracks that are moving, without effective "
+        "forward progression."
+    ),
+    "immotile": "Percent of analyzed tracks with no detected movement.",
+    "total": "Progressive motility plus non-progressive motility.",
+    "tracks": (
+        "Tracks analyzed in this microscope field. Not the sperm count of "
+        "the ejaculate, and not a concentration."
+    ),
+    "vcl": (
+        "Mean curvilinear velocity, in micrometers per second, along each "
+        "track's actual path."
+    ),
+    "vsl": (
+        "Mean straight-line velocity, in micrometers per second, from the "
+        "first point of a track to the last."
+    ),
+    "fps": "Frame rate of the microscope clip, in frames per second.",
+    "clusters": "Cluster detections excluded from the motility percentages.",
+    "retention": (
+        "Post-thaw progressive motility divided by pre-freeze progressive "
+        "motility. This compares the two samples. It does not show that the "
+        "same individual sperm survived."
+    ),
+}
 MOTILITY_DISCLAIMER = (
-    "Research and education demo only. Not a diagnostic tool and does not "
-    "replace a clinical semen analysis."
+    "Automated first-pass microscopy for the andrology lab. "
+    "Not a diagnosis and not a substitute for a semen analysis."
 )
