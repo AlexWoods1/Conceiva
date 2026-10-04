@@ -57,7 +57,19 @@ def test_shortlist_answers_json_for_the_swipe_deck(api):
         f"/couple/shortlist/{donor_id}/add", data={"csrf": api.csrf}, headers=headers
     )
     assert added.status_code == 200
-    assert added.json() == {"ok": True, "message": "Added to shortlist."}
+    assert added.json() == {
+        "ok": True,
+        "added": True,
+        "message": "Added to shortlist.",
+    }
+    assert api.client.cookies.get("session")
+
+    again = api.client.post(
+        f"/couple/shortlist/{donor_id}/add", data={"csrf": api.csrf}, headers=headers
+    )
+    assert again.status_code == 200
+    assert again.json()["ok"] is True
+    assert again.json()["added"] is False
 
     missing = api.client.post(
         "/couple/shortlist/99999/add", data={"csrf": api.csrf}, headers=headers
@@ -75,6 +87,37 @@ def test_shortlist_answers_json_for_the_swipe_deck(api):
     form_post = api.post(f"/couple/shortlist/{donor_id}/add")
     assert form_post.status_code == 303
     assert form_post.headers["location"] == "/match"
+
+
+def test_shortlist_session_survives_empty_db_rows(api):
+    """Cookie shortlist rehydrates SQLite after a /tmp wipe on another instance."""
+    _consent(api, "bank@example.com", role="bank")
+    api.post("/bank/donors/new", {**DONOR_FIELDS, "code": "DN-1"})
+    api.post("/logout")
+    _couple_with_survey(api)
+    api.get("/match")
+    donor_id = _donor_ids(api)[0]
+    headers = {"Accept": "application/json"}
+    added = api.client.post(
+        f"/couple/shortlist/{donor_id}/add", data={"csrf": api.csrf}, headers=headers
+    )
+    assert added.json()["added"] is True
+
+    db = api.session()
+    try:
+        from sqlalchemy import delete
+
+        from app.models import ShortlistItem
+
+        db.execute(delete(ShortlistItem))
+        db.commit()
+    finally:
+        db.close()
+
+    page = api.get("/couple/shortlist")
+    assert page.status_code == 200
+    assert "DN-1" in page.text
+    assert "No candidates yet" not in page.text
 
 
 def test_home_shows_latest_donors_with_childhood_photos(make_app):
