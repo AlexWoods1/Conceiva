@@ -103,6 +103,7 @@ from app.services import (
     packet_for,
     ranked_matches,
     remove_from_shortlist,
+    resolve_visit_donors,
     run_candidate_report,
     score_donor_for_couple,
     shortlist_donor_ids,
@@ -224,6 +225,60 @@ def _mark_consented(request: Request, user: User) -> None:
     """Persist consent on the user row and in the session (survives /tmp reseeds)."""
     user.consent_at = datetime.now(timezone.utc)
     request.session["consent_ok"] = True
+
+
+def _session_shortlist_ids(request: Request) -> list[int]:
+    """Donor ids stored in the cookie session for Vercel /tmp durability."""
+    raw = request.session.get("shortlist_ids") or []
+    ids: list[int] = []
+    for item in raw:
+        try:
+            donor_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if donor_id > 0 and donor_id not in ids:
+            ids.append(donor_id)
+        if len(ids) >= MAX_SHORTLIST:
+            break
+    return ids
+
+
+def _set_session_shortlist(request: Request, donor_ids: list[int]) -> None:
+    """Write a capped, de-duplicated shortlist id list into the session."""
+    clean: list[int] = []
+    for donor_id in donor_ids:
+        if donor_id > 0 and donor_id not in clean:
+            clean.append(donor_id)
+        if len(clean) >= MAX_SHORTLIST:
+            break
+    request.session["shortlist_ids"] = clean
+
+
+def _mirror_shortlist(request: Request, db: Session, couple_user_id: int) -> None:
+    """Merge cookie shortlist into SQLite and refresh the cookie from the DB.
+
+    Vercel Fluid instances each get their own /tmp database. A successful
+    swipe can land on instance A while /couple/shortlist is served from B.
+    The signed session cookie is shared, so it is the durable shortlist.
+    """
+    session_ids = _session_shortlist_ids(request)
+    db_ids = set(shortlist_donor_ids(db, couple_user_id))
+    for donor_id in session_ids:
+        if donor_id in db_ids:
+            continue
+        # * None means inserted or already present; a string is a hard reject.
+        if add_to_shortlist(db, couple_user_id, donor_id) is None:
+            db_ids.add(donor_id)
+    # * autoflush is off — flush so later SELECTs in this request see new rows.
+    if session_ids:
+        db.flush()
+    ordered = [donor_id for donor_id in session_ids if donor_id in db_ids]
+    ordered.extend(
+        row.donor_id
+        for row in list_shortlist(db, couple_user_id)
+        if row.donor_id not in set(ordered)
+    )
+    _set_session_shortlist(request, ordered)
 
 
 def _require_user(request: Request) -> User:
@@ -448,6 +503,7 @@ async def login_submit(request: Request):
             error="Email or password does not match a record.",
         )
     request.session["user_id"] = user.id
+    request.session.pop("shortlist_ids", None)
     if user.consent_at is not None:
         request.session["consent_ok"] = True
     else:
@@ -485,6 +541,7 @@ async def register_submit(request: Request):
     db.refresh(user)
     request.session["user_id"] = user.id
     request.session.pop("consent_ok", None)
+    request.session.pop("shortlist_ids", None)
     return _redirect("/consent")
 
 
@@ -803,6 +860,7 @@ def match_list(request: Request):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
+    _mirror_shortlist(request, db, user.id)
     survey = get_or_create_survey(db, user.id)
     all_rows = ranked_matches(db, user, request.app.state.settings)
     trait_filter = parse_trait_filter(request.query_params)
@@ -962,7 +1020,9 @@ def _motility_split(summary: dict) -> dict[str, float | int | bool | None]:
         "total_pct": total,
         "progressive_pct": progressive,
         "non_progressive_pct": (
-            float(non_progressive) if non_progressive is not None else total - progressive
+            float(non_progressive)
+            if non_progressive is not None
+            else total - progressive
         ),
         "immotile_pct": float(immotile) if immotile is not None else 100.0 - total,
         "track_count": int(tracks) if tracks is not None else None,
@@ -1048,9 +1108,7 @@ def _backfill_motility_sample(db: Session, donor: Donor) -> None:
             total_pct=total,
             progressive_pct=progressive,
             non_progressive_pct=(
-                non_progressive
-                if non_progressive is not None
-                else total - progressive
+                non_progressive if non_progressive is not None else total - progressive
             ),
             immotile_pct=immotile if immotile is not None else 100.0 - total,
             track_count=donor.motility_track_count,
@@ -1154,19 +1212,11 @@ def _motility_rows(
             pct,
         ),
         _metric_row("immotile", "Immotile", fresh, thawed, "immotile_pct", pct),
-        _metric_row(
-            "total", "Total motility", fresh, thawed, "total_pct", pct
-        ),
-        _metric_row(
-            "tracks", "Tracks analyzed", fresh, thawed, "track_count", count
-        ),
+        _metric_row("total", "Total motility", fresh, thawed, "total_pct", pct),
+        _metric_row("tracks", "Tracks analyzed", fresh, thawed, "track_count", count),
         {"kind": "group", "label": "Kinematics"},
-        _metric_row(
-            "vcl", "Mean VCL (µm/s)", fresh, thawed, "mean_vcl", speed
-        ),
-        _metric_row(
-            "vsl", "Mean VSL (µm/s)", fresh, thawed, "mean_vsl", speed
-        ),
+        _metric_row("vcl", "Mean VCL (µm/s)", fresh, thawed, "mean_vcl", speed),
+        _metric_row("vsl", "Mean VSL (µm/s)", fresh, thawed, "mean_vsl", speed),
     ]
 
 
@@ -1177,9 +1227,7 @@ def _quality_rows(
     count = lambda value: str(int(value))
     fps = lambda value: f"{value:.2f}"
     rows = [
-        _metric_row(
-            "tracks", "Tracks analyzed", fresh, thawed, "track_count", count
-        ),
+        _metric_row("tracks", "Tracks analyzed", fresh, thawed, "track_count", count),
         _metric_row("fps", "Frame rate (fps)", fresh, thawed, "fps", fps),
     ]
     if any(
@@ -1486,9 +1534,7 @@ async def donor_motility_upload(request: Request, donor_id: int):
             )
         except MotilityServiceError as exc:
             db.commit()
-            return _donor_page(
-                request, user, donor, error=exc.message, status_code=503
-            )
+            return _donor_page(request, user, donor, error=exc.message, status_code=503)
         video_url = str(result.get("annotated_video_url") or "")
         if video_url.startswith("/"):
             video_url = f"{settings.motility_service_url}{video_url}"
@@ -1782,10 +1828,7 @@ def _visit_candidates(
         return []
     settings = request.app.state.settings
     rows: list[tuple[Donor, object, list]] = []
-    for donor_id in appointment_donor_ids(db, appointment.id):
-        donor = db.get(Donor, donor_id)
-        if donor is None:
-            continue
+    for donor in resolve_visit_donors(db, appointment.id):
         result = score_donor_for_couple(db, couple, donor, settings)
         sentences = latest_candidate_report(db, appointment.id, donor.id)
         rows.append((donor, result, sentences))
@@ -1801,13 +1844,24 @@ async def shortlist_add(request: Request, donor_id: int):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
+    _mirror_shortlist(request, db, user.id)
+    already = donor_id in shortlist_donor_ids(db, user.id)
     error = add_to_shortlist(db, user.id, donor_id)
+    added = False
     if not error:
+        session_ids = _session_shortlist_ids(request)
+        if donor_id not in session_ids:
+            session_ids.append(donor_id)
+            _set_session_shortlist(request, session_ids)
+        added = not already
         db.commit()
-    message = error or "Added to shortlist."
+    message = error or (
+        "Already on your shortlist." if already else "Added to shortlist."
+    )
     if _wants_json(request):
         return JSONResponse(
-            {"ok": not error, "message": message}, status_code=400 if error else 200
+            {"ok": not error, "added": added, "message": message},
+            status_code=400 if error else 200,
         )
     _flash(request, message)
     return _redirect("/match")
@@ -1823,6 +1877,10 @@ async def shortlist_remove(request: Request, donor_id: int):
         return _redirect(needed.path)
     db = _db(request)
     remove_from_shortlist(db, user.id, donor_id)
+    _set_session_shortlist(
+        request,
+        [item for item in _session_shortlist_ids(request) if item != donor_id],
+    )
     db.commit()
     if _wants_json(request):
         return JSONResponse({"ok": True, "message": "Removed from shortlist."})
@@ -1841,6 +1899,7 @@ def shortlist_page(request: Request):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
+    _mirror_shortlist(request, db, user.id)
     settings = request.app.state.settings
     rows = []
     for item in list_shortlist(db, user.id):
@@ -1867,6 +1926,7 @@ def book_form(request: Request):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
+    _mirror_shortlist(request, db, user.id)
     shortlist_count = len(list_shortlist(db, user.id))
     groups = []
     for counselor, profile, slots in counselors_with_open_slots(db):
@@ -1895,6 +1955,7 @@ async def book_submit(request: Request):
     except _RedirectNeeded as needed:
         return _redirect(needed.path)
     db = _db(request)
+    _mirror_shortlist(request, db, user.id)
     try:
         slot_id = int(str(form.get("slot_id", "")))
     except ValueError:
@@ -2214,10 +2275,7 @@ async def counselor_report_all(request: Request, appointment_id: int):
         return _redirect(f"/counselor/appointments/{appointment.id}")
     settings = request.app.state.settings
     count = 0
-    for donor_id in appointment_donor_ids(db, appointment.id):
-        donor = db.get(Donor, donor_id)
-        if donor is None:
-            continue
+    for donor in resolve_visit_donors(db, appointment.id):
         run_candidate_report(db, appointment, donor, settings)
         count += 1
     db.commit()

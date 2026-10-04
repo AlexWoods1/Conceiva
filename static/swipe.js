@@ -113,13 +113,15 @@
       }
       const data = await response.json();
       if (!data.ok) {
-        showToast(data.message, "error");
+        showToast(data.message || data.detail || "Could not shortlist.", "error");
         return false;
       }
+      const wasNew = data.added !== false;
       card.dataset.shortlisted = "true";
       card.querySelector(".action-like").classList.add("is-on");
-      setShortlistCount(1);
-      showMatch(card);
+      if (wasNew) setShortlistCount(1);
+      if (wasNew) showMatch(card);
+      else showToast(`${code} is already on your shortlist.`);
       return true;
     } catch (_) {
       showToast("Could not reach the server. Try again.", "error");

@@ -237,7 +237,7 @@ class Appointment(Base):
 
 
 class AppointmentDonor(Base):
-    """Donor ids the couple booked with. Profiles stay live in the donor table."""
+    """Donor snapshot for a booked visit. Code survives /tmp id reshuffles."""
 
     __tablename__ = "appointment_donors"
     __table_args__ = (
@@ -249,6 +249,8 @@ class AppointmentDonor(Base):
         ForeignKey("appointments.id"), index=True
     )
     donor_id: Mapped[int] = mapped_column(ForeignKey("donors.id"), index=True)
+    # * Stable bank code copied at booking so visit matching can re-bind after reseeds.
+    donor_code: Mapped[str] = mapped_column(String(64), default="")
 
 
 class CandidateReport(Base):

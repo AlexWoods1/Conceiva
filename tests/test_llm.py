@@ -7,6 +7,7 @@ import httpx
 
 from app.config import Settings
 from app.llm import (
+    _parse_json_object,
     build_explain_packet,
     deterministic_explain,
     explain,
@@ -214,6 +215,22 @@ def test_explain_rejects_a_json_array(caplog):
 
     assert sentences == deterministic_explain(packet)
     assert "LLM explanation failed" in caplog.text
+
+
+def test_parse_json_object_strips_markdown_fences():
+    raw = '```json\n{"sentences": [{"text": "Hi", "field": "donor.panel"}]}\n```'
+    assert _parse_json_object(raw)["sentences"][0]["field"] == "donor.panel"
+
+
+def test_explain_accepts_fenced_json_from_the_model():
+    packet = _packet()
+    fenced = (
+        '```json\n{"sentences": [{"text": "Panel is listed.", '
+        '"field": "donor.panel"}]}\n```'
+    )
+    with _model_client(fenced) as client:
+        sentences = explain(packet, _settings(llm_api_key="test-key"), client)
+    assert any(item.field == "donor.panel" for item in sentences)
 
 
 def test_model_sentence_uses_the_record_value():

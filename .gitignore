@@ -232,5 +232,5 @@ __marimo__/
 
 # Demo database and Vercel link (data/ itself is handled above, with
 # exceptions for the ml pipeline's .gitkeep and the trained detector)
-.vercel/
 
+.vercel

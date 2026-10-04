@@ -20,6 +20,7 @@ from app.llm import (
     CitedSentence,
     ExplainPacket,
     Fact,
+    chat_json_object,
     deterministic_explain,
     filter_model_sentences,
 )
@@ -414,42 +415,21 @@ def _call_counselor_llm(
         {"field": fact.field, "value": fact.value, "text": fact.text}
         for fact in packet.facts
     ]
-    body = {
-        "model": settings.llm_model,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You write a briefing for a genetic counselor about one sperm-donor "
-                    "candidate. Use only the JSON facts. Every sentence must include a "
-                    "field id from those facts. If a field is missing, say it is not in "
-                    "the record. Highlight carrier conflicts, gaps, and preference "
-                    "mismatches so the counselor can give feedback in a meeting. "
-                    "Do not diagnose. Do not predict a child's appearance. "
-                    "Do not rank by race, ancestry, or attractiveness. "
-                    'Return {"sentences": [{"text": "...", "field": "field.id"}]}.'
-                ),
-            },
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {"facts": fact_payload, "missing": packet.missing}
-                ),
-            },
-        ],
-    }
-    response = client.post(
-        f"{settings.llm_base_url}/chat/completions",
-        headers={"Authorization": f"Bearer {settings.llm_api_key}"},
-        json=body,
+    return chat_json_object(
+        settings,
+        client,
+        system=(
+            "You write a briefing for a genetic counselor about one sperm-donor "
+            "candidate. Use only the JSON facts. Every sentence must include a "
+            "field id from those facts. If a field is missing, say it is not in "
+            "the record. Highlight carrier conflicts, gaps, and preference "
+            "mismatches so the counselor can give feedback in a meeting. "
+            "Do not diagnose. Do not predict a child's appearance. "
+            "Do not rank by race, ancestry, or attractiveness. "
+            'Return {"sentences": [{"text": "...", "field": "field.id"}]}.'
+        ),
+        user=json.dumps({"facts": fact_payload, "missing": packet.missing}),
     )
-    response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    parsed = json.loads(content)
-    if not isinstance(parsed, dict):
-        raise ValueError("Model response was not a JSON object.")
-    return parsed
 
 
 def generate_counselor_report(
@@ -471,7 +451,7 @@ def generate_counselor_report(
     local = deterministic_explain(packet)
     if not settings.llm_api_key:
         return local
-    http = client or httpx.Client(timeout=20.0)
+    http = client or httpx.Client(timeout=60.0)
     close_client = client is None
     try:
         payload = _call_counselor_llm(packet, settings, http)
@@ -482,7 +462,13 @@ def generate_counselor_report(
             )
             return local
         return _merge_hard_stops(checked, local)
-    except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
+    except (
+        httpx.HTTPError,
+        KeyError,
+        ValueError,
+        json.JSONDecodeError,
+        IndexError,
+    ) as exc:
         detail = type(exc).__name__
         if isinstance(exc, httpx.HTTPStatusError):
             body = (exc.response.text or "")[:300]

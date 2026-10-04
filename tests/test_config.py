@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import DEV_SESSION_SECRET, PROJECT_ROOT, load_settings
+from app.config import DEV_SESSION_SECRET, PROJECT_ROOT, _is_loopback_url, load_settings
 
 
 def test_load_settings_uses_defaults_when_environment_is_empty(monkeypatch):
@@ -88,13 +88,14 @@ def test_vercel_rejects_default_session_secret(monkeypatch):
         load_settings()
 
 
-def test_vercel_rejects_loopback_motility_url_when_uploads_on(monkeypatch):
+def test_vercel_disables_uploads_when_motility_url_is_loopback(monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.setenv("SESSION_SECRET", "vercel-secret")
     monkeypatch.delenv("MOTILITY_SERVICE_URL", raising=False)
     monkeypatch.setenv("MOTILITY_UPLOADS_ENABLED", "true")
-    with pytest.raises(RuntimeError, match="MOTILITY_SERVICE_URL"):
-        load_settings()
+    settings = load_settings()
+    assert settings.motility_uploads_enabled is False
+    assert _is_loopback_url(settings.motility_service_url)
 
 
 def test_vercel_allows_loopback_when_uploads_disabled(monkeypatch):

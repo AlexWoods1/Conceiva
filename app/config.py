@@ -79,8 +79,8 @@ def load_settings() -> Settings:
             "SESSION_SECRET must be set to a non-default value on Vercel."
         )
     contact_email = os.environ.get("CONTACT_EMAIL", "privacy@example.com").strip()
-    # * Form stays on unless explicitly disabled. Analyze still needs a reachable
-    # * motility backend (local :8010 or a public MOTILITY_SERVICE_URL).
+    # * Prefer a public motility URL on Vercel. Do not crash the whole site when
+    # * misconfigured — hide uploads instead so couples/counselors still work.
     motility_uploads_enabled = _as_bool("MOTILITY_UPLOADS_ENABLED", "true")
     motility_service_url = os.environ.get(
         "MOTILITY_SERVICE_URL", "http://localhost:8010"
@@ -90,10 +90,13 @@ def load_settings() -> Settings:
         and motility_uploads_enabled
         and _is_loopback_url(motility_service_url)
     ):
-        raise RuntimeError(
-            "On Vercel, set MOTILITY_SERVICE_URL to the public EC2 motility "
-            "host (not localhost), or set MOTILITY_UPLOADS_ENABLED=false."
+        import logging
+
+        logging.getLogger(__name__).error(
+            "MOTILITY_SERVICE_URL is loopback on Vercel; disabling motility uploads. "
+            "Set a public EC2 URL or MOTILITY_UPLOADS_ENABLED=false."
         )
+        motility_uploads_enabled = False
     return Settings(
         database_path=database_path,
         session_secret=session_secret,

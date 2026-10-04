@@ -153,7 +153,10 @@ def test_fresh_and_thaw_clips_stay_separate(api, monkeypatch):
         assert rows["fresh"].track_count == 11
         assert rows["post_thaw"].progressive_pct == pytest.approx(20.0)
         assert rows["post_thaw"].track_count == 9
-        assert rows["post_thaw"].video_url == "http://localhost:8010/videos/thaw/tracked.mp4"
+        assert (
+            rows["post_thaw"].video_url
+            == "http://localhost:8010/videos/thaw/tracked.mp4"
+        )
         donor = db.get(Donor, donor_id)
         assert donor.motility_progressive_pct == pytest.approx(36.0)
         assert donor.motility_sample_timing == "fresh"
@@ -392,24 +395,18 @@ def test_analyzer_kinematics_are_stored_and_review_can_be_recorded(api, monkeypa
         f"/bank/donors/{donor_id}/motility/review", {"action": "accept"}
     )
     assert accepted.status_code == 303
-    flagged = api.post(
-        f"/bank/donors/{donor_id}/motility/review", {"action": "flag"}
-    )
+    flagged = api.post(f"/bank/donors/{donor_id}/motility/review", {"action": "flag"})
     assert flagged.status_code == 303
-    rerun = api.post(
-        f"/bank/donors/{donor_id}/motility/review", {"action": "rerun"}
-    )
+    rerun = api.post(f"/bank/donors/{donor_id}/motility/review", {"action": "rerun"})
     assert rerun.status_code == 303
 
     db = api.session()
     try:
         donor = db.get(Donor, donor_id)
         assert donor.motility_review_status == "awaiting_review"
-        assert (
-            db.scalars(
-                select(MotilitySample).where(MotilitySample.donor_id == donor_id)
-            ).all()
-        )
+        assert db.scalars(
+            select(MotilitySample).where(MotilitySample.donor_id == donor_id)
+        ).all()
     finally:
         db.close()
 

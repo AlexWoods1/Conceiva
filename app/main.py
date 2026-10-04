@@ -51,6 +51,7 @@ _SQLITE_COLUMN_DDL: dict[str, tuple[tuple[str, str], ...]] = {
         ("paid_at", "DATETIME"),
         ("stripe_checkout_session_id", "VARCHAR(255)"),
     ),
+    "appointment_donors": (("donor_code", "VARCHAR(64) NOT NULL DEFAULT ''"),),
 }
 
 

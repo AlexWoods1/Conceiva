@@ -215,46 +215,99 @@ def _merge_hard_stops(
     return prefix + model_sentences
 
 
-def _call_llm(packet: ExplainPacket, settings: Settings, client: httpx.Client) -> dict:
-    """Call an OpenAI-compatible chat endpoint and parse a JSON object."""
-    fact_payload = [
-        {"field": fact.field, "value": fact.value, "text": fact.text}
-        for fact in packet.facts
-    ]
-    body = {
+def _message_text(message: dict) -> str:
+    """Pull plain text from an OpenAI-compatible chat message.
+
+    Gemini's OpenAI layer sometimes returns ``content`` as a string, a list of
+    parts, or null when only thought metadata is present.
+    """
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                chunks.append(part)
+            elif isinstance(part, dict):
+                text = part.get("text")
+                if isinstance(text, str):
+                    chunks.append(text)
+        return "".join(chunks)
+    refusal = message.get("refusal")
+    if isinstance(refusal, str) and refusal.strip():
+        raise ValueError(f"Model refused: {refusal.strip()[:200]}")
+    raise ValueError("Model response had empty content.")
+
+
+def _parse_json_object(raw: str) -> dict:
+    """Parse a JSON object, tolerating Markdown fences from chat models."""
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    parsed = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise ValueError("Model response was not a JSON object.")
+    return parsed
+
+
+def chat_json_object(
+    settings: Settings,
+    client: httpx.Client,
+    *,
+    system: str,
+    user: str,
+) -> dict:
+    """POST ``/chat/completions`` and return a parsed JSON object.
+
+    Uses the OpenAI-compatible shape so Gemini
+    (``generativelanguage.googleapis.com/v1beta/openai``) and OpenAI both work.
+    """
+    body: dict = {
         "model": settings.llm_model,
         "response_format": {"type": "json_object"},
         "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You explain one donor match for decision support. "
-                    "Use only the JSON facts. Every sentence must include a field id from those facts. "
-                    "If a field is missing, say it is not in the record. "
-                    "Do not diagnose. Do not predict a child's appearance. "
-                    "Do not rank by race, ancestry, or attractiveness. "
-                    'Return {"sentences": [{"text": "...", "field": "field.id"}]}.'
-                ),
-            },
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {"facts": fact_payload, "missing": packet.missing}
-                ),
-            },
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ],
     }
+    # * Gemini 2.5/3.x thinking burns latency; prefer a short answer for JSON.
+    if "gemini" in settings.llm_model.lower():
+        body["reasoning_effort"] = "low"
     response = client.post(
         f"{settings.llm_base_url}/chat/completions",
         headers={"Authorization": f"Bearer {settings.llm_api_key}"},
         json=body,
     )
     response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    parsed = json.loads(content)
-    if not isinstance(parsed, dict):
-        raise ValueError("Model response was not a JSON object.")
-    return parsed
+    message = response.json()["choices"][0]["message"]
+    return _parse_json_object(_message_text(message))
+
+
+def _call_llm(packet: ExplainPacket, settings: Settings, client: httpx.Client) -> dict:
+    """Call an OpenAI-compatible chat endpoint and parse a JSON object."""
+    fact_payload = [
+        {"field": fact.field, "value": fact.value, "text": fact.text}
+        for fact in packet.facts
+    ]
+    return chat_json_object(
+        settings,
+        client,
+        system=(
+            "You explain one donor match for decision support. "
+            "Use only the JSON facts. Every sentence must include a field id from those facts. "
+            "If a field is missing, say it is not in the record. "
+            "Do not diagnose. Do not predict a child's appearance. "
+            "Do not rank by race, ancestry, or attractiveness. "
+            'Return {"sentences": [{"text": "...", "field": "field.id"}]}.'
+        ),
+        user=json.dumps({"facts": fact_payload, "missing": packet.missing}),
+    )
 
 
 def explain(
@@ -276,7 +329,8 @@ def explain(
     local = deterministic_explain(packet)
     if not settings.llm_api_key:
         return local
-    http = client or httpx.Client(timeout=20.0)
+    # * Gemini thinking models often need >20s on cold paths.
+    http = client or httpx.Client(timeout=60.0)
     close_client = client is None
     try:
         payload = _call_llm(packet, settings, http)
@@ -287,7 +341,13 @@ def explain(
             )
             return local
         return _merge_hard_stops(checked, local)
-    except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
+    except (
+        httpx.HTTPError,
+        KeyError,
+        ValueError,
+        json.JSONDecodeError,
+        IndexError,
+    ) as exc:
         detail = type(exc).__name__
         if isinstance(exc, httpx.HTTPStatusError):
             body = (exc.response.text or "")[:300]

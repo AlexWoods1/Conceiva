@@ -2,7 +2,18 @@
 
 from sqlalchemy import select
 
-from app.models import AvailabilitySlot, Carrier, CounselorProfile, Donor, User
+from app.models import (
+    Appointment,
+    AppointmentDonor,
+    AvailabilitySlot,
+    Carrier,
+    CounselorProfile,
+    CoupleProfile,
+    CoupleSurvey,
+    Donor,
+    PriorHistory,
+    User,
+)
 from app.security import verify_password
 from app.seed import (
     DEMO_BANK_EMAIL,
@@ -46,10 +57,113 @@ def test_seed_demo_inserts_logins_donors_and_carrier_rows(db):
     assert all(
         donor.bank_user_id == bank.id and donor.catalog_confirmed for donor in donors
     )
-    assert {(row.gene, row.subject_id) for row in carriers} == {
-        ("CFTR", donors[1].id),
-        ("HBB", donors[3].id),
+    assert {(row.gene, row.subject_type, row.subject_id) for row in carriers} == {
+        ("CFTR", "donor", donors[1].id),
+        ("HBB", "donor", donors[3].id),
+        ("CFTR", "couple", couple.id),
     }
+
+
+def test_seed_demo_prepares_couple_intake_for_matches(db):
+    seed_demo(db)
+    db.commit()
+
+    couple = db.scalars(select(User).where(User.email == DEMO_COUPLE_EMAIL)).one()
+    profile = db.get(CoupleProfile, couple.id)
+    history = db.get(PriorHistory, couple.id)
+    survey = db.get(CoupleSurvey, couple.id)
+
+    assert profile is not None
+    assert profile.blood_type == "O"
+    assert profile.rh == "negative"
+    assert history is not None
+    assert history.prior_pregnancies == 1
+    assert survey is not None
+    assert survey.preferences_done is True
+    assert survey.family_limit == 2
+    assert survey.id_release == "open"
+    assert survey.ancestry == "Finnish"
+
+
+def test_seed_demo_backfills_couple_intake_on_existing_demo(db):
+    seed_demo(db)
+    db.commit()
+    couple = db.scalars(select(User).where(User.email == DEMO_COUPLE_EMAIL)).one()
+    survey = db.get(CoupleSurvey, couple.id)
+    assert survey is not None
+    survey.preferences_done = False
+    survey.family_limit = None
+    db.commit()
+
+    seed_demo(db)
+    db.commit()
+    db.refresh(survey)
+
+    assert survey.preferences_done is True
+    assert survey.family_limit == 2
+
+
+def test_seed_demo_books_counselor_visit_with_matchable_candidates(db):
+    from pathlib import Path
+
+    from app.config import Settings
+    from app.services import resolve_visit_donors, score_donor_for_couple
+
+    seed_demo(db)
+    db.commit()
+
+    couple = db.scalars(select(User).where(User.email == DEMO_COUPLE_EMAIL)).one()
+    counselor = db.scalars(select(User).where(User.email == DEMO_COUNSELOR_EMAIL)).one()
+    appointment = db.scalars(
+        select(Appointment).where(
+            Appointment.couple_user_id == couple.id,
+            Appointment.counselor_user_id == counselor.id,
+        )
+    ).one()
+    donors = resolve_visit_donors(db, appointment.id)
+    codes = {donor.code for donor in donors}
+    assert codes == {"DN-100", "DN-240"}
+    assert all(
+        row.donor_code in {"DN-100", "DN-240"}
+        for row in db.scalars(
+            select(AppointmentDonor).where(
+                AppointmentDonor.appointment_id == appointment.id
+            )
+        )
+    )
+
+    settings = Settings(
+        database_path=Path("unused.db"),
+        session_secret="test",
+        llm_api_key="",
+        llm_base_url="https://llm.example/v1",
+        llm_model="test",
+        enable_face_compare=False,
+        seed_on_empty=False,
+    )
+    by_code = {
+        donor.code: score_donor_for_couple(db, couple, donor, settings)
+        for donor in donors
+    }
+    assert by_code["DN-240"].hard_stop is True
+    assert by_code["DN-100"].hard_stop is False
+
+
+def test_seed_demo_does_not_rebook_after_cancel(db):
+    from app.services import cancel_appointment
+
+    seed_demo(db)
+    db.commit()
+    appointment = db.scalars(select(Appointment)).one()
+    assert cancel_appointment(db, appointment) is None
+    db.commit()
+
+    seed_demo(db)
+    db.commit()
+    db.refresh(appointment)
+
+    assert appointment.status == "cancelled"
+    assert list(db.scalars(select(Appointment))) == [appointment]
 
 
 def test_seed_demo_marks_couple_paid_and_creates_future_slots(db):
