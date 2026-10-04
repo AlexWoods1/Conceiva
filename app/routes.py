@@ -84,6 +84,7 @@ from app.seed import (
 from app.services import (
     add_to_shortlist,
     appointment_donor_ids,
+    active_booked_appointment,
     book_appointment,
     cancel_appointment,
     counselor_display_name,
@@ -1922,21 +1923,24 @@ def book_form(request: Request):
     db = _db(request)
     _mirror_shortlist(request, db, user.id)
     shortlist_count = len(list_shortlist(db, user.id))
+    active = active_booked_appointment(db, user.id)
     groups = []
-    for counselor, profile, slots in counselors_with_open_slots(db):
-        groups.append(
-            {
-                "counselor": counselor,
-                "display_name": profile.display_name.strip() or counselor.email,
-                "slots": slots,
-            }
-        )
+    if active is None:
+        for counselor, profile, slots in counselors_with_open_slots(db):
+            groups.append(
+                {
+                    "counselor": counselor,
+                    "display_name": profile.display_name.strip() or counselor.email,
+                    "slots": slots,
+                }
+            )
     return _render(
         request,
         "book.html",
         user,
         groups=groups,
         shortlist_count=shortlist_count,
+        active_appointment=active,
     )
 
 
@@ -1950,6 +1954,13 @@ async def book_submit(request: Request):
         return _redirect(needed.path)
     db = _db(request)
     _mirror_shortlist(request, db, user.id)
+    active = active_booked_appointment(db, user.id)
+    if active is not None:
+        _flash(
+            request,
+            "You already have a booked visit. Cancel it before booking another slot.",
+        )
+        return _redirect(f"/couple/appointments/{active.id}")
     try:
         slot_id = int(str(form.get("slot_id", "")))
     except ValueError:
@@ -1962,6 +1973,9 @@ async def book_submit(request: Request):
     result = book_appointment(db, user, slot)
     if isinstance(result, str):
         _flash(request, result)
+        active = active_booked_appointment(db, user.id)
+        if active is not None and "already have a booked visit" in result:
+            return _redirect(f"/couple/appointments/{active.id}")
         return _redirect("/couple/book")
     db.commit()
     _flash(request, "Visit booked. The counselor can open your shortlist.")

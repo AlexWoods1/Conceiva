@@ -7,7 +7,13 @@
   Your shortlist has {{ shortlist_count }} candidate{{ "s" if shortlist_count != 1 else "" }}
   (cap {{ max_shortlist }}).
 </p>
-{% if shortlist_count < 1 %}
+{% if active_appointment %}
+<p class="flash" role="status">
+  You already have a booked visit.
+  <a href="/couple/appointments/{{ active_appointment.id }}">Open it</a>
+  or cancel it before booking another slot.
+</p>
+{% elif shortlist_count < 1 %}
 <p class="error">Add at least one candidate on <a href="/couple/shortlist">Shortlist</a> before booking.</p>
 {% elif not groups %}
 <p>No open counselor slots right now. Ask a counselor to post availability, or use the demo counselor after reseeding.</p>

@@ -139,6 +139,44 @@ def _ensure_appointments_slot_reusable(engine) -> None:
         conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
+def _ensure_one_booked_visit_per_couple(engine) -> None:
+    """Partial unique index: at most one booked appointment per couple.
+
+    Double-submits and races otherwise create duplicate visits or 500 on
+    IntegrityError. Cancelled rows are excluded so rebooking stays allowed.
+    """
+    with engine.begin() as conn:
+        # * Drop extras so CREATE UNIQUE INDEX can succeed on dirty demo DBs.
+        dupes = conn.exec_driver_sql(
+            """
+            SELECT id FROM appointments
+            WHERE status = 'booked'
+              AND id NOT IN (
+                SELECT MIN(id) FROM appointments
+                WHERE status = 'booked'
+                GROUP BY couple_user_id
+              )
+            """
+        ).fetchall()
+        for (appointment_id,) in dupes:
+            aid = int(appointment_id)
+            conn.exec_driver_sql(
+                f"DELETE FROM appointment_donors WHERE appointment_id = {aid}"
+            )
+            conn.exec_driver_sql(
+                f"DELETE FROM candidate_reports WHERE appointment_id = {aid}"
+            )
+            conn.exec_driver_sql(f"DELETE FROM appointments WHERE id = {aid}")
+        conn.exec_driver_sql(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            uq_appointments_one_booked_per_couple
+            ON appointments (couple_user_id)
+            WHERE status = 'booked'
+            """
+        )
+
+
 class DatabaseMiddleware(BaseHTTPMiddleware):
     """Open one database session per request and commit when the handler succeeds."""
 
@@ -187,6 +225,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     Base.metadata.create_all(engine)
     _ensure_sqlite_columns(engine)
     _ensure_appointments_slot_reusable(engine)
+    _ensure_one_booked_visit_per_couple(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     # * Idempotent seed: fills missing demo accounts without wiping existing rows.
     if settings.seed_on_empty:

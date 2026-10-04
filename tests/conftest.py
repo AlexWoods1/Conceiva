@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
 
 from app.config import Settings
-from app.main import create_app
+from app.main import _ensure_one_booked_visit_per_couple, create_app
 from app.models import Base
 from app.routes import _csrf
 
@@ -94,6 +94,9 @@ def _json_render(request, name, user, status_code=200, **extra):
         payload["slot_ids"] = [
             slot.id for group in extra["groups"] for slot in group["slots"]
         ]
+    if "active_appointment" in extra:
+        active = extra["active_appointment"]
+        payload["active_appointment_id"] = None if active is None else active.id
     if "candidates" in extra:
         # * Couple appointment detail uses tuples; counselor session uses dicts.
         codes = []
@@ -210,6 +213,8 @@ def db(tmp_path):
         connect_args={"check_same_thread": False},
     )
     Base.metadata.create_all(engine)
+    # * Match create_app: one booked visit per couple (partial unique index).
+    _ensure_one_booked_visit_per_couple(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = factory()
     try:

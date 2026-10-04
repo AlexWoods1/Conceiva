@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -421,6 +422,18 @@ def slot_is_open(
     return taken is None
 
 
+def active_booked_appointment(db: Session, couple_user_id: int) -> Appointment | None:
+    """Return the couple's current booked visit, if any."""
+    return db.scalars(
+        select(Appointment)
+        .where(
+            Appointment.couple_user_id == couple_user_id,
+            Appointment.status == APPOINTMENT_BOOKED,
+        )
+        .order_by(Appointment.id)
+    ).first()
+
+
 def book_appointment(
     db: Session,
     couple: User,
@@ -438,6 +451,12 @@ def book_appointment(
     Returns:
         The appointment, or an error string.
     """
+    existing = active_booked_appointment(db, couple.id)
+    if existing is not None:
+        return (
+            "You already have a booked visit. "
+            "Cancel it before booking another slot."
+        )
     if not slot_is_open(db, slot, now=now):
         return "That slot is no longer available."
     items = list_shortlist(db, couple.id)
@@ -445,24 +464,37 @@ def book_appointment(
         return "Add at least one candidate to the shortlist before booking."
     if len(items) > MAX_SHORTLIST:
         return f"Shortlist is limited to {MAX_SHORTLIST} candidates for one visit."
+    donors: list[Donor] = []
+    for item in items:
+        donor = db.get(Donor, item.donor_id)
+        if donor is None or not donor.catalog_confirmed:
+            continue
+        donors.append(donor)
+    if not donors:
+        return "Your shortlist has no confirmed donors left to book."
     appointment = Appointment(
         couple_user_id=couple.id,
         counselor_user_id=slot.counselor_user_id,
         slot_id=slot.id,
         status=APPOINTMENT_BOOKED,
-        created_at=now or datetime.now(timezone.utc),
+        created_at=_as_utc(now or datetime.now(timezone.utc)).replace(tzinfo=None),
     )
-    db.add(appointment)
-    db.flush()
-    for item in items:
-        donor = db.get(Donor, item.donor_id)
-        db.add(
-            AppointmentDonor(
-                appointment_id=appointment.id,
-                donor_id=item.donor_id,
-                donor_code=donor.code if donor is not None else "",
-            )
-        )
+    try:
+        # * Savepoint so a unique-index race does not wipe shortlist mirror work.
+        with db.begin_nested():
+            db.add(appointment)
+            db.flush()
+            for donor in donors:
+                db.add(
+                    AppointmentDonor(
+                        appointment_id=appointment.id,
+                        donor_id=donor.id,
+                        donor_code=donor.code,
+                    )
+                )
+            db.flush()
+    except IntegrityError:
+        return "That slot is no longer available."
     return appointment
 
 
