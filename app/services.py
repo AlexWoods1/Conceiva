@@ -454,8 +454,7 @@ def book_appointment(
     existing = active_booked_appointment(db, couple.id)
     if existing is not None:
         return (
-            "You already have a booked visit. "
-            "Cancel it before booking another slot."
+            "You already have a booked visit. " "Cancel it before booking another slot."
         )
     if not slot_is_open(db, slot, now=now):
         return "That slot is no longer available."

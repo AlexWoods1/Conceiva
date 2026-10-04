@@ -147,8 +147,7 @@ def _ensure_one_booked_visit_per_couple(engine) -> None:
     """
     with engine.begin() as conn:
         # * Drop extras so CREATE UNIQUE INDEX can succeed on dirty demo DBs.
-        dupes = conn.exec_driver_sql(
-            """
+        dupes = conn.exec_driver_sql("""
             SELECT id FROM appointments
             WHERE status = 'booked'
               AND id NOT IN (
@@ -156,8 +155,7 @@ def _ensure_one_booked_visit_per_couple(engine) -> None:
                 WHERE status = 'booked'
                 GROUP BY couple_user_id
               )
-            """
-        ).fetchall()
+            """).fetchall()
         for (appointment_id,) in dupes:
             aid = int(appointment_id)
             conn.exec_driver_sql(
@@ -167,14 +165,12 @@ def _ensure_one_booked_visit_per_couple(engine) -> None:
                 f"DELETE FROM candidate_reports WHERE appointment_id = {aid}"
             )
             conn.exec_driver_sql(f"DELETE FROM appointments WHERE id = {aid}")
-        conn.exec_driver_sql(
-            """
+        conn.exec_driver_sql("""
             CREATE UNIQUE INDEX IF NOT EXISTS
             uq_appointments_one_booked_per_couple
             ON appointments (couple_user_id)
             WHERE status = 'booked'
-            """
-        )
+            """)
 
 
 class DatabaseMiddleware(BaseHTTPMiddleware):
