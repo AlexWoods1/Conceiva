@@ -1,4 +1,4 @@
-"""Public pages: privacy, contact, and the sample start."""
+"""Public pages: privacy and contact."""
 
 from sqlalchemy import select
 from starlette.testclient import TestClient
@@ -11,18 +11,16 @@ def test_public_pages_render(make_app):
     with TestClient(app) as client:
         home = client.get("/")
         privacy = client.get("/privacy")
-        start = client.get("/start")
         contact = client.get("/contact")
+        start = client.get("/start")
 
     assert home.status_code == 200
-    assert "Sample start" in home.text
+    assert "Sample start" not in home.text
     assert "Hard stop" in home.text
     assert privacy.status_code == 200
     assert "not a diagnosis" in privacy.text.lower()
     assert "stand-in" in privacy.text.lower()
-    assert start.status_code == 200
-    assert "couple@demo.local" in start.text
-    assert "DN-240" in start.text
+    assert start.status_code == 404
     assert contact.status_code == 200
     assert "privacy@example.com" in contact.text
 
