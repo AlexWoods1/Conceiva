@@ -8,7 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.constants import DEFAULT_SLOT_MINUTES
-from app.models import AvailabilitySlot, Carrier, CounselorProfile, Donor, User
+from app.models import (
+    AvailabilitySlot,
+    Carrier,
+    CounselorProfile,
+    CoupleProfile,
+    CoupleSurvey,
+    Donor,
+    PriorHistory,
+    User,
+)
 from app.security import hash_password
 
 DEMO_COUPLE_EMAIL = "couple@demo.local"
@@ -134,13 +143,80 @@ def _backfill_demo_consent(db: Session) -> None:
             user.consent_at = now
 
 
+def _ensure_demo_couple_intake(db: Session, couple_id: int) -> None:
+    """Fill the sample walkthrough intake so Matches and full profiles work.
+
+    Matches stay empty until preferences_done. Vercel /tmp reseeds often, so
+    the demo couple must ship ready for the ranked deck and DN-240 hard stop.
+    """
+    if db.get(CoupleProfile, couple_id) is None:
+        db.add(
+            CoupleProfile(
+                user_id=couple_id,
+                blood_type="O",
+                rh="negative",
+                adult_photo_key="",
+            )
+        )
+    if db.get(PriorHistory, couple_id) is None:
+        db.add(
+            PriorHistory(
+                user_id=couple_id,
+                prior_pregnancies=1,
+                prior_donors="",
+                miscarriages=0,
+                known_conditions="",
+            )
+        )
+    survey = db.get(CoupleSurvey, couple_id)
+    if survey is None:
+        db.add(
+            CoupleSurvey(
+                user_id=couple_id,
+                ancestry="Finnish",
+                cmv_requirement="any",
+                clinical_notes="",
+                id_release="open",
+                family_limit=2,
+                clinical_done=True,
+                preferences_done=True,
+            )
+        )
+    elif not survey.preferences_done or survey.family_limit is None:
+        # * Older demo DBs that only created the login still need a deck.
+        survey.ancestry = survey.ancestry or "Finnish"
+        survey.cmv_requirement = survey.cmv_requirement or "any"
+        survey.id_release = survey.id_release or "open"
+        survey.family_limit = survey.family_limit or 2
+        survey.clinical_done = True
+        survey.preferences_done = True
+    has_cftr = db.scalars(
+        select(Carrier).where(
+            Carrier.subject_type == "couple",
+            Carrier.subject_id == couple_id,
+            Carrier.gene == "CFTR",
+        )
+    ).first()
+    if has_cftr is None:
+        db.add(
+            Carrier(
+                subject_type="couple",
+                subject_id=couple_id,
+                gene="CFTR",
+                zygosity="heterozygous",
+                condition="Cystic fibrosis",
+            )
+        )
+
+
 def seed_demo(db: Session) -> None:
     """Insert the demo bank, donors, couple, counselor, and open slots.
 
     Idempotent: if the demo bank email already exists, this is a no-op so
     shared /tmp databases are not wiped or duplicated on cold start.
     Missing motility fields on seeded donors are backfilled so older DBs
-    still show the Motility test section on Vercel.
+    still show the Motility test section on Vercel. Demo couple intake is
+    also backfilled so Matches is not empty after a /tmp recycle.
 
     Args:
         db: Open session. The caller commits.
@@ -149,6 +225,9 @@ def seed_demo(db: Session) -> None:
     if existing is not None:
         _backfill_demo_motility(db)
         _backfill_demo_consent(db)
+        couple = db.scalars(select(User).where(User.email == DEMO_COUPLE_EMAIL)).first()
+        if couple is not None:
+            _ensure_demo_couple_intake(db, couple.id)
         return
 
     # * Pre-consent demo logins so Vercel /tmp reseeds do not re-open the gate.
@@ -309,3 +388,4 @@ def seed_demo(db: Session) -> None:
             condition="Sickle cell disease",
         )
     )
+    _ensure_demo_couple_intake(db, couple.id)
