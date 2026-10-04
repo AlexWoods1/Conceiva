@@ -1,4 +1,4 @@
-"""Tests for donor childhood photos and the swipe deck's JSON shortlist calls."""
+"""Tests for donor childhood photos and match-list JSON shortlist calls."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _donor_ids(api) -> list[int]:
         db.close()
 
 
-def test_shortlist_answers_json_for_the_swipe_deck(api):
+def test_shortlist_answers_json_for_the_match_list(api):
     _consent(api, "bank@example.com", role="bank")
     api.post("/bank/donors/new", {**DONOR_FIELDS, "code": "DN-1"})
     api.post("/logout")

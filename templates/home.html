@@ -15,7 +15,7 @@
         <p class="eyebrow eyebrow-light">Find a donor you can connect with</p>
         <h1>Family building that puts your health first</h1>
         <p class="lede">
-          Meet donors one card at a time, starting with their baby photos. Carrier conflicts surface
+          Browse ranked donors starting with their baby photos. Carrier conflicts surface
           before you fall for a profile. Blood-type flags and your survey set the rank.
         </p>
         <div class="hero-cta">
@@ -116,8 +116,8 @@
     <div class="doors">
       <a class="door door-lavender" href="/login?role=couple">
         <span class="door-tag">Couples</span>
-        <h3>Swipe through donors</h3>
-        <p>Enter your history, carrier report, and a two-step survey. Then swipe through ranked donor cards, starting with each donor's baby photo.</p>
+        <h3>Browse ranked donors</h3>
+        <p>Enter your history, carrier report, and a two-step survey. Then review ranked donors, starting with each donor's baby photo.</p>
         <span class="door-link">Grow my family &rarr;</span>
       </a>
       <a class="door door-coral" href="/login?role=bank">
@@ -138,7 +138,7 @@
   <section class="steps-band">
     <div class="landing-section">
       <p class="eyebrow">How it works</p>
-      <h2 class="display">From first swipe to counselor visit</h2>
+      <h2 class="display">From first match to counselor visit</h2>
       <ol class="how-steps">
         <li>
           <span class="how-num">1</span>
@@ -147,8 +147,8 @@
         </li>
         <li>
           <span class="how-num">2</span>
-          <h3>Swipe and shortlist</h3>
-          <p>Swipe right to shortlist, left to pass. Every card shows the medical rank and why.</p>
+          <h3>Review and shortlist</h3>
+          <p>Browse the ranked list and heart the donors you want to discuss. Every profile shows the medical rank and why.</p>
         </li>
         <li>
           <span class="how-num">3</span>
@@ -158,7 +158,7 @@
         <li>
           <span class="how-num">4</span>
           <h3>Decide together</h3>
-          <p>Ask the explanation tool about any card. It only cites what is on record.</p>
+          <p>Ask the explanation tool about any donor. It only cites what is on record.</p>
         </li>
       </ol>
     </div>
@@ -170,7 +170,7 @@
     <div class="accordion">
       <details open>
         <summary><span class="fact-num">01</span> Hard stop</summary>
-        <p>A gene both profiles list as a confirmed recessive carrier blocks that donor. The conflict stays on the card, so you always see why.</p>
+        <p>A gene both profiles list as a confirmed recessive carrier blocks that donor. The conflict stays on the profile, so you always see why.</p>
       </details>
       <details>
         <summary><span class="fact-num">02</span> Soft weights</summary>
@@ -185,7 +185,7 @@
 
   <section class="mission-band">
     <div class="mission-inner">
-      <h2 class="display">Every card is built from the record. Missing facts stay missing.</h2>
+      <h2 class="display">Every profile is built from the record. Missing facts stay missing.</h2>
       <ul class="stats">
         <li><strong>{{ carrier_gene_count }}</strong><span>common carrier genes on the quick-add list</span></li>
         <li><strong>{{ max_shortlist }}</strong><span>donors per shortlist, one counselor visit</span></li>
@@ -251,16 +251,16 @@
     <h2 class="display">Frequently asked questions</h2>
     <div class="accordion faq">
       <details>
-        <summary>Whose baby photo is on each card?</summary>
+        <summary>Whose baby photo is on each profile?</summary>
         <p>The donor's own childhood photo, as sperm banks publish them. It is never a prediction of your child. In this demo every photo is a synthetic stand-in.</p>
       </details>
       <details>
-        <summary>Does swiping change the medical rank?</summary>
-        <p>No. Swiping right adds a donor to your shortlist, and swiping left hides the card for now. The rank comes only from carrier status, blood type, and your survey.</p>
+        <summary>Does shortlisting change the medical rank?</summary>
+        <p>No. Adding a donor to your shortlist only marks them for your counselor visit. The rank comes only from carrier status, blood type, and your survey.</p>
       </details>
       <details>
         <summary>Can I still shortlist a blocked donor?</summary>
-        <p>Yes. A carrier conflict stays visible on the card, and you can keep that donor on the shortlist to discuss with a counselor.</p>
+        <p>Yes. A carrier conflict stays visible on the profile, and you can keep that donor on the shortlist to discuss with a counselor.</p>
       </details>
       <details>
         <summary>What does the paywall unlock?</summary>
@@ -275,12 +275,12 @@
 
   <section class="cta-band">
     {% if user %}
-    <h2 class="display">Ready for your next swipe?</h2>
-    <p>Your deck is ranked from your saved history and survey.</p>
-    <a class="button button-white" href="{% if user.role == 'couple' %}/match{% else %}/account{% endif %}">{% if user.role == 'couple' %}Open my deck{% else %}My account{% endif %}</a>
+    <h2 class="display">Ready to review your matches?</h2>
+    <p>Your list is ranked from your saved history and survey.</p>
+    <a class="button button-white" href="{% if user.role == 'couple' %}/match{% else %}/account{% endif %}">{% if user.role == 'couple' %}Open my matches{% else %}My account{% endif %}</a>
     {% else %}
     <h2 class="display">Sign up now and begin your search</h2>
-    <p>Intake is free. Swipe through ranked donors once your survey is saved.</p>
+    <p>Intake is free. Browse ranked donors once your survey is saved.</p>
     <a class="button button-white" href="/login?role=couple">Join free</a>
     {% endif %}
   </section>

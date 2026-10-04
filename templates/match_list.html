@@ -7,20 +7,16 @@
     <div>
       <p class="eyebrow">Your matches</p>
       <h1 class="display">Ranked donors</h1>
-      <p class="help">Clear medical matches come first. A carrier conflict stays on the card and is not hidden. Swipe right to shortlist, left to pass.</p>
+      <p class="help">Clear medical matches come first. A carrier conflict stays visible and is not hidden. Add candidates to your shortlist when you want to discuss them with a counselor.</p>
     </div>
     <div class="deck-tools">
       <a class="pill pill-heart" href="/couple/shortlist">&#9829; <span>Shortlist <span data-shortlist-count>{{ shortlist_count }}</span>/{{ max_shortlist }}</span></a>
       <a class="pill" href="/couple/book">Book a counselor</a>
-      <div class="view-toggle" data-view-toggle hidden>
-        <button type="button" data-view="cards" aria-pressed="true">Cards</button>
-        <button type="button" data-view="list" aria-pressed="false">List</button>
-      </div>
     </div>
   </header>
 
   {% if not survey.preferences_done %}
-  <p class="empty-state">Save both survey steps to see your donor deck.</p>
+  <p class="empty-state">Save both survey steps to see your donor matches.</p>
   {% else %}
   <details class="filter-drawer" {% if trait_filter.active %}open{% endif %}>
     <summary>
@@ -79,7 +75,7 @@
     {% for donor, result in rows %}
     {% set traits = trait_summary(donor) %}
     {% set shortlisted = donor.id in shortlisted_ids %}
-    <article class="swipe-card{% if result.hard_stop %} is-blocked{% endif %}" data-card data-code="{{ donor.code }}" data-shortlisted="{{ 'true' if shortlisted else 'false' }}">
+    <article class="match-tile{% if result.hard_stop %} is-blocked{% endif %}" data-card data-code="{{ donor.code }}" data-shortlisted="{{ 'true' if shortlisted else 'false' }}">
       <div class="card-photos" data-photos>
         <div class="photo-bars" aria-hidden="true">
           {% if donor.baby_photo_key %}<span class="is-active"></span><span></span>{% else %}<span class="is-active"></span>{% endif %}
@@ -98,8 +94,6 @@
         <button type="button" class="photo-nav photo-prev" data-photo-step="-1" aria-label="Previous photo"></button>
         <button type="button" class="photo-nav photo-next" data-photo-step="1" aria-label="Next photo"></button>
         {% endif %}
-        <span class="stamp stamp-like" aria-hidden="true">Shortlist</span>
-        <span class="stamp stamp-nope" aria-hidden="true">Pass</span>
         <div class="card-overlay">
           {% if result.hard_stop %}
           <span class="rank-badge rank-badge-stop">Carrier conflict</span>
@@ -118,7 +112,7 @@
         </div>
       </div>
 
-      <div class="card-body donor-copy" data-card-body>
+      <div class="card-body donor-copy">
         {% if result.hard_stop %}
         <p class="stop">Carrier conflict. Not a candidate.</p>
         {% endif %}
@@ -159,32 +153,15 @@
       </div>
 
       <div class="card-actions">
-        <button type="button" class="action action-nope" data-action="pass" aria-label="Pass on {{ donor.code }}" title="Pass (←)" hidden>&#10005;</button>
-        <button type="button" class="action action-info" data-action="info" aria-label="Details for {{ donor.code }}" title="Details (↑)" hidden>i</button>
         <form method="post" action="/couple/shortlist/{{ donor.id }}/add" class="inline" data-like-form>
           <input type="hidden" name="csrf" value="{{ csrf }}" />
-          <button type="submit" class="action action-like{% if shortlisted %} is-on{% endif %}" aria-label="{% if shortlisted %}{{ donor.code }} is on your shortlist{% else %}Add {{ donor.code }} to shortlist{% endif %}" title="Shortlist (→)">&#9829;</button>
+          <button type="submit" class="action action-like{% if shortlisted %} is-on{% endif %}" aria-label="{% if shortlisted %}{{ donor.code }} is on your shortlist{% else %}Add {{ donor.code }} to shortlist{% endif %}" title="Add to shortlist">&#9829;</button>
         </form>
       </div>
     </article>
     {% endfor %}
-
-    <div class="deck-empty" data-deck-empty hidden>
-      <p class="deck-empty-icon" aria-hidden="true">&#10047;</p>
-      <h2 class="display">You've seen every donor</h2>
-      <p class="help">Your shortlist now has <span data-shortlist-count>{{ shortlist_count }}</span> candidate{{ "s" if shortlist_count != 1 }}.</p>
-      <div class="hero-cta">
-        <a class="button" href="/couple/shortlist">Open shortlist</a>
-        <button type="button" class="button-ghost-form" data-restart>Start over</button>
-      </div>
-    </div>
   </div>
 
-  <div class="deck-footer" data-deck-footer hidden>
-    <button type="button" class="pill" data-undo disabled>&#8630; Undo</button>
-    <span class="deck-counter" data-counter></span>
-    <span class="deck-keys">Keys: &larr; pass &middot; &rarr; shortlist &middot; &uarr; details</span>
-  </div>
   <div class="toast" data-toast role="status" aria-live="polite" hidden></div>
   <div class="match-modal" data-match-modal role="dialog" aria-modal="true" aria-labelledby="match-modal-title" hidden>
     <div class="match-modal-card">
@@ -196,7 +173,7 @@
       </div>
       <p class="help" data-match-text></p>
       <div class="hero-cta">
-        <button type="button" class="button-magenta" data-match-close>Keep swiping</button>
+        <button type="button" class="button-magenta" data-match-close>Keep browsing</button>
         <a class="button button-ghost" href="/couple/shortlist">View shortlist</a>
       </div>
     </div>
@@ -205,4 +182,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="/static/swipe.js" defer></script>{% endblock %}
+{% block scripts %}<script src="/static/match_list.js" defer></script>{% endblock %}
