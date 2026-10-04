@@ -24,6 +24,7 @@ from app.models import (
 from app.phenotype import resemblance_score
 from app.security import hash_password
 from app.services import (
+    active_booked_appointment,
     add_to_shortlist,
     appointment_donor_ids,
     book_appointment,
@@ -463,6 +464,114 @@ def test_book_and_cancel_appointment(db):
     db.commit()
     assert appointment.status == APPOINTMENT_CANCELLED
     assert cancel_appointment(db, appointment) == "That visit is already cancelled."
+
+
+def test_book_rejects_second_active_visit_and_skips_stale_donors(db):
+    couple = _user(db, "couple@example.com")
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    bank = _user(db, "bank@example.com", role="bank")
+    kept = _donor(db, bank.id, "DN-KEEP")
+    stale = _donor(db, bank.id, "DN-STALE", catalog_confirmed=False)
+    now = datetime(2030, 2, 1, 10, 0, tzinfo=timezone.utc)
+    first_slot = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(days=1),
+        duration_minutes=45,
+    )
+    second_slot = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(days=2),
+        duration_minutes=45,
+    )
+    db.add_all([first_slot, second_slot])
+    db.commit()
+
+    assert add_to_shortlist(db, couple.id, kept.id) is None
+    # * Stale row can remain after a donor is pulled from confirmed inventory.
+    db.add(ShortlistItem(couple_user_id=couple.id, donor_id=stale.id))
+    db.commit()
+
+    appointment = book_appointment(db, couple, first_slot, now=now)
+    db.commit()
+    assert isinstance(appointment, Appointment)
+    assert appointment_donor_ids(db, appointment.id) == [kept.id]
+    assert active_booked_appointment(db, couple.id).id == appointment.id
+
+    blocked = book_appointment(db, couple, second_slot, now=now)
+    assert isinstance(blocked, str)
+    assert "already have a booked visit" in blocked
+    booked_count = db.scalar(
+        select(func.count())
+        .select_from(Appointment)
+        .where(
+            Appointment.couple_user_id == couple.id,
+            Appointment.status == APPOINTMENT_BOOKED,
+        )
+    )
+    assert booked_count == 1
+
+
+def test_book_rejects_shortlist_with_only_unconfirmed_donors(db):
+    couple = _user(db, "couple@example.com")
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    bank = _user(db, "bank@example.com", role="bank")
+    draft = _donor(db, bank.id, "DN-DRAFT", catalog_confirmed=False)
+    now = datetime(2030, 2, 1, 10, 0, tzinfo=timezone.utc)
+    slot = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(days=1),
+        duration_minutes=45,
+    )
+    db.add(slot)
+    db.commit()
+    db.add(ShortlistItem(couple_user_id=couple.id, donor_id=draft.id))
+    db.commit()
+
+    result = book_appointment(db, couple, slot, now=now)
+    assert result == "Your shortlist has no confirmed donors left to book."
+    assert active_booked_appointment(db, couple.id) is None
+
+
+def test_book_unique_index_race_returns_error_without_duplicate(db, monkeypatch):
+    couple = _user(db, "couple@example.com")
+    counselor = _user(db, "counselor@example.com", role="counselor")
+    bank = _user(db, "bank@example.com", role="bank")
+    donor = _donor(db, bank.id, "DN-1")
+    now = datetime(2030, 2, 1, 10, 0, tzinfo=timezone.utc)
+    first_slot = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(days=1),
+        duration_minutes=45,
+    )
+    second_slot = AvailabilitySlot(
+        counselor_user_id=counselor.id,
+        starts_at=now + timedelta(days=2),
+        duration_minutes=45,
+    )
+    db.add_all([first_slot, second_slot])
+    db.commit()
+    assert add_to_shortlist(db, couple.id, donor.id) is None
+    db.commit()
+
+    first = book_appointment(db, couple, first_slot, now=now)
+    db.commit()
+    assert isinstance(first, Appointment)
+
+    monkeypatch.setattr(
+        "app.services.active_booked_appointment", lambda *_args, **_kwargs: None
+    )
+    raced = book_appointment(db, couple, second_slot, now=now)
+    assert isinstance(raced, str)
+    assert "no longer available" in raced
+    booked_count = db.scalar(
+        select(func.count())
+        .select_from(Appointment)
+        .where(
+            Appointment.couple_user_id == couple.id,
+            Appointment.status == APPOINTMENT_BOOKED,
+        )
+    )
+    assert booked_count == 1
 
 
 def test_store_and_latest_candidate_report_upserts(db):

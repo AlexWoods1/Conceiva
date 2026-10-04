@@ -219,7 +219,97 @@ def test_booking_rejects_empty_shortlist_and_taken_slot(api):
 
     again = api.post("/couple/book", {"slot_id": str(slot_id)})
     assert again.status_code == 303
+    assert again.headers["location"].startswith("/couple/appointments/")
+    assert (
+        "already have a booked visit"
+        in api.get(again.headers["location"]).json()["flash"].lower()
+    )
+
+
+def test_booking_blocks_second_visit_hides_slots_and_keeps_one_row(api):
+    _prepare_couple_with_shortlist(api, email="onevisit@example.com")
+    book_page = api.get("/couple/book").json()
+    slot_ids = book_page["slot_ids"]
+    assert len(slot_ids) >= 2
+    first = api.post("/couple/book", {"slot_id": str(slot_ids[0])})
+    assert first.status_code == 303
+    appointment_id = int(first.headers["location"].rsplit("/", 1)[-1])
+
+    after = api.get("/couple/book").json()
+    assert after["slot_ids"] == []
+    assert after["active_appointment_id"] == appointment_id
+
+    second = api.post("/couple/book", {"slot_id": str(slot_ids[1])})
+    assert second.status_code == 303
+    assert second.headers["location"] == f"/couple/appointments/{appointment_id}"
+    assert (
+        "already have a booked visit"
+        in api.get(second.headers["location"]).json()["flash"].lower()
+    )
+
+    db = api.session()
+    try:
+        couple = db.scalars(
+            select(User).where(User.email == "onevisit@example.com")
+        ).one()
+        booked = list(
+            db.scalars(
+                select(Appointment).where(
+                    Appointment.couple_user_id == couple.id,
+                    Appointment.status == "booked",
+                )
+            )
+        )
+        assert len(booked) == 1
+        assert booked[0].id == appointment_id
+    finally:
+        db.close()
+
+
+def test_booking_rejects_slot_taken_by_other_couple(api):
+    _prepare_couple_with_shortlist(api, email="firstbook@example.com")
+    slot_id = api.get("/couple/book").json()["slot_ids"][0]
+    assert api.post("/couple/book", {"slot_id": str(slot_id)}).status_code == 303
+
+    api.post("/logout")
+    _prepare_couple_with_shortlist(api, email="secondbook@example.com")
+    book_page = api.get("/couple/book").json()
+    assert slot_id not in book_page["slot_ids"]
+    stolen = api.post("/couple/book", {"slot_id": str(slot_id)})
+    assert stolen.status_code == 303
+    assert stolen.headers["location"] == "/couple/book"
     assert "no longer available" in api.get("/couple/book").json()["flash"].lower()
+
+
+def test_booking_stale_shortlist_does_not_500(api):
+    dn100, dn240 = _prepare_couple_with_shortlist(api, email="stalebook@example.com")
+    db = api.session()
+    try:
+        db.get(Donor, dn100.id).catalog_confirmed = False
+        db.get(Donor, dn240.id).catalog_confirmed = False
+        db.commit()
+    finally:
+        db.close()
+
+    slot_id = api.get("/couple/book").json()["slot_ids"][0]
+    failed = api.post("/couple/book", {"slot_id": str(slot_id)})
+    assert failed.status_code == 303
+    assert failed.headers["location"] == "/couple/book"
+    assert "confirmed donors" in api.get("/couple/book").json()["flash"].lower()
+
+    db = api.session()
+    try:
+        couple = db.scalars(
+            select(User).where(User.email == "stalebook@example.com")
+        ).one()
+        assert (
+            db.scalars(
+                select(Appointment).where(Appointment.couple_user_id == couple.id)
+            ).first()
+            is None
+        )
+    finally:
+        db.close()
 
 
 def test_snapshot_freezes_ids_and_report_uses_live_profile(api):
