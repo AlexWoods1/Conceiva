@@ -31,6 +31,7 @@ from app.models import (
     CoupleSurvey,
     Donor,
     LlmLog,
+    MotilitySample,
     PriorHistory,
     ShortlistItem,
     User,
@@ -626,6 +627,7 @@ def delete_donor(db: Session, donor: Donor) -> None:
             Carrier.subject_type == "donor", Carrier.subject_id == donor_id
         )
     )
+    db.execute(delete(MotilitySample).where(MotilitySample.donor_id == donor_id))
     db.delete(donor)
 
 

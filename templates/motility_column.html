@@ -1,0 +1,18 @@
+<article class="lab-video">
+  <header>
+    <h3>{{ title }}</h3>
+    <p>{{ kicker }}</p>
+  </header>
+  <div class="clip-frame">
+    {% if sample and sample.video_url %}
+    <video src="{{ sample.video_url }}" controls></video>
+    {% else %}
+    <p class="clip-empty">No clip yet</p>
+    {% endif %}
+  </div>
+  {% if motility_uploads_enabled %}
+  <label class="clip-pick">{{ field_label }}
+    <input type="file" name="{{ field }}" accept="video/*" />
+  </label>
+  {% endif %}
+</article>
