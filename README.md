@@ -17,8 +17,6 @@ Demo bank: `bank@demo.local` / `demo-bank`
 
 Demo counselor: `counselor@demo.local` / `demo-counselor`
 
-The walkthrough is on `/start`.
-
 Public signup is for **couples only**. Bank and counselor accounts come from the demo seed.
 
 After pulling schema changes, delete `data/app.db` (or set a fresh `DATABASE_PATH`) so SQLite recreates tables, or rely on startup column adds when possible.

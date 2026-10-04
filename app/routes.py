@@ -417,12 +417,6 @@ def home(request: Request):
     )
 
 
-@router.get("/start")
-def sample_start(request: Request):
-    """Walk through the seeded couple and bank demos."""
-    return _render(request, "start.html", _user(request))
-
-
 @router.get("/privacy")
 def privacy(request: Request):
     """Privacy policy for the demo."""
