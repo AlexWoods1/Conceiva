@@ -1020,7 +1020,9 @@ def _motility_split(summary: dict) -> dict[str, float | int | bool | None]:
         "total_pct": total,
         "progressive_pct": progressive,
         "non_progressive_pct": (
-            float(non_progressive) if non_progressive is not None else total - progressive
+            float(non_progressive)
+            if non_progressive is not None
+            else total - progressive
         ),
         "immotile_pct": float(immotile) if immotile is not None else 100.0 - total,
         "track_count": int(tracks) if tracks is not None else None,
@@ -1106,9 +1108,7 @@ def _backfill_motility_sample(db: Session, donor: Donor) -> None:
             total_pct=total,
             progressive_pct=progressive,
             non_progressive_pct=(
-                non_progressive
-                if non_progressive is not None
-                else total - progressive
+                non_progressive if non_progressive is not None else total - progressive
             ),
             immotile_pct=immotile if immotile is not None else 100.0 - total,
             track_count=donor.motility_track_count,
@@ -1212,19 +1212,11 @@ def _motility_rows(
             pct,
         ),
         _metric_row("immotile", "Immotile", fresh, thawed, "immotile_pct", pct),
-        _metric_row(
-            "total", "Total motility", fresh, thawed, "total_pct", pct
-        ),
-        _metric_row(
-            "tracks", "Tracks analyzed", fresh, thawed, "track_count", count
-        ),
+        _metric_row("total", "Total motility", fresh, thawed, "total_pct", pct),
+        _metric_row("tracks", "Tracks analyzed", fresh, thawed, "track_count", count),
         {"kind": "group", "label": "Kinematics"},
-        _metric_row(
-            "vcl", "Mean VCL (µm/s)", fresh, thawed, "mean_vcl", speed
-        ),
-        _metric_row(
-            "vsl", "Mean VSL (µm/s)", fresh, thawed, "mean_vsl", speed
-        ),
+        _metric_row("vcl", "Mean VCL (µm/s)", fresh, thawed, "mean_vcl", speed),
+        _metric_row("vsl", "Mean VSL (µm/s)", fresh, thawed, "mean_vsl", speed),
     ]
 
 
@@ -1235,9 +1227,7 @@ def _quality_rows(
     count = lambda value: str(int(value))
     fps = lambda value: f"{value:.2f}"
     rows = [
-        _metric_row(
-            "tracks", "Tracks analyzed", fresh, thawed, "track_count", count
-        ),
+        _metric_row("tracks", "Tracks analyzed", fresh, thawed, "track_count", count),
         _metric_row("fps", "Frame rate (fps)", fresh, thawed, "fps", fps),
     ]
     if any(
@@ -1544,9 +1534,7 @@ async def donor_motility_upload(request: Request, donor_id: int):
             )
         except MotilityServiceError as exc:
             db.commit()
-            return _donor_page(
-                request, user, donor, error=exc.message, status_code=503
-            )
+            return _donor_page(request, user, donor, error=exc.message, status_code=503)
         video_url = str(result.get("annotated_video_url") or "")
         if video_url.startswith("/"):
             video_url = f"{settings.motility_service_url}{video_url}"
