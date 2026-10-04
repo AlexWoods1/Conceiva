@@ -455,7 +455,14 @@ def book_appointment(
     db.add(appointment)
     db.flush()
     for item in items:
-        db.add(AppointmentDonor(appointment_id=appointment.id, donor_id=item.donor_id))
+        donor = db.get(Donor, item.donor_id)
+        db.add(
+            AppointmentDonor(
+                appointment_id=appointment.id,
+                donor_id=item.donor_id,
+                donor_code=donor.code if donor is not None else "",
+            )
+        )
     return appointment
 
 
@@ -479,13 +486,43 @@ def cancel_appointment(db: Session, appointment: Appointment) -> str | None:
 
 def appointment_donor_ids(db: Session, appointment_id: int) -> list[int]:
     """Return donor ids booked on a visit, in snapshot order."""
-    return list(
+    return [donor.id for donor in resolve_visit_donors(db, appointment_id)]
+
+
+def resolve_visit_donors(db: Session, appointment_id: int) -> list[Donor]:
+    """Live donor rows for a visit, re-bound by code when ids go stale.
+
+    Args:
+        db: Open session.
+        appointment_id: Booked visit id.
+
+    Returns:
+        Donors in booking order. Missing codes are skipped.
+    """
+    rows = list(
         db.scalars(
-            select(AppointmentDonor.donor_id)
+            select(AppointmentDonor)
             .where(AppointmentDonor.appointment_id == appointment_id)
             .order_by(AppointmentDonor.id)
         )
     )
+    donors: list[Donor] = []
+    for row in rows:
+        if not row.donor_code:
+            donor = db.get(Donor, row.donor_id)
+            if donor is not None:
+                row.donor_code = donor.code
+        donor = db.get(Donor, row.donor_id)
+        if donor is None and row.donor_code:
+            donor = db.scalars(
+                select(Donor).where(Donor.code == row.donor_code)
+            ).first()
+            if donor is not None:
+                # * /tmp reseed reused codes under new primary keys.
+                row.donor_id = donor.id
+        if donor is not None:
+            donors.append(donor)
+    return donors
 
 
 def sentences_to_json(sentences: list[CitedSentence]) -> str:

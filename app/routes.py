@@ -103,6 +103,7 @@ from app.services import (
     packet_for,
     ranked_matches,
     remove_from_shortlist,
+    resolve_visit_donors,
     run_candidate_report,
     score_donor_for_couple,
     shortlist_donor_ids,
@@ -1839,10 +1840,7 @@ def _visit_candidates(
         return []
     settings = request.app.state.settings
     rows: list[tuple[Donor, object, list]] = []
-    for donor_id in appointment_donor_ids(db, appointment.id):
-        donor = db.get(Donor, donor_id)
-        if donor is None:
-            continue
+    for donor in resolve_visit_donors(db, appointment.id):
         result = score_donor_for_couple(db, couple, donor, settings)
         sentences = latest_candidate_report(db, appointment.id, donor.id)
         rows.append((donor, result, sentences))
@@ -2289,10 +2287,7 @@ async def counselor_report_all(request: Request, appointment_id: int):
         return _redirect(f"/counselor/appointments/{appointment.id}")
     settings = request.app.state.settings
     count = 0
-    for donor_id in appointment_donor_ids(db, appointment.id):
-        donor = db.get(Donor, donor_id)
-        if donor is None:
-            continue
+    for donor in resolve_visit_donors(db, appointment.id):
         run_candidate_report(db, appointment, donor, settings)
         count += 1
     db.commit()

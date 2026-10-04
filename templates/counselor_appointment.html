@@ -67,6 +67,17 @@
           · motility {{ "%.1f"|format(item.donor.motility_total_pct) }}% / progressive {{ "%.1f"|format(item.donor.motility_progressive_pct) }}%
           {% endif %}
         </p>
+        {% if item.result.reasons %}
+        <h3>Match reasons</h3>
+        <ul class="reasons">
+          {% for reason in item.result.reasons if reason.kind == "hard_stop" %}
+          <li class="reason-stop">{{ reason.text }}</li>
+          {% endfor %}
+          {% for reason in item.result.reasons if reason.kind != "hard_stop" %}
+          <li>{{ reason.text }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
 
         {% if item.carriers or item.couple_carriers %}
         <div class="visit-carrier-grid">

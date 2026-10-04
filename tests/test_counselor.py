@@ -231,14 +231,15 @@ def test_snapshot_freezes_ids_and_report_uses_live_profile(api):
     api.post(f"/couple/shortlist/{dn240.id}/remove")
     db = api.session()
     try:
-        visit_ids = list(
+        visit_rows = list(
             db.scalars(
-                select(AppointmentDonor.donor_id).where(
+                select(AppointmentDonor).where(
                     AppointmentDonor.appointment_id == appointment_id
                 )
             )
         )
-        assert set(visit_ids) == {dn100.id, dn240.id}
+        assert {row.donor_id for row in visit_rows} == {dn100.id, dn240.id}
+        assert {row.donor_code for row in visit_rows} == {"DN-100", "DN-240"}
         donor = db.get(Donor, dn100.id)
         donor.panel = ""
         db.commit()
@@ -254,6 +255,42 @@ def test_snapshot_freezes_ids_and_report_uses_live_profile(api):
     by_code = dict(zip(session["candidate_codes"], session["report_texts"]))
     assert any("CFTR" in text for text in by_code["DN-240"])
     assert any("donor.panel" in text for text in by_code["DN-100"])
+
+
+def test_visit_rebinds_donors_by_code_when_ids_go_stale(api):
+    from sqlalchemy import text
+
+    from app.services import resolve_visit_donors
+
+    dn100, dn240 = _prepare_couple_with_shortlist(api)
+    slot_id = api.get("/couple/book").json()["slot_ids"][0]
+    booked = api.post("/couple/book", {"slot_id": str(slot_id)})
+    appointment_id = int(booked.headers["location"].rsplit("/", 1)[-1])
+
+    db = api.session()
+    try:
+        # * Simulate a /tmp reshuffle where codes stayed and primary keys moved.
+        db.execute(text("PRAGMA foreign_keys=OFF"))
+        stale = 99001
+        for row in db.scalars(
+            select(AppointmentDonor).where(
+                AppointmentDonor.appointment_id == appointment_id
+            )
+        ):
+            row.donor_id = stale
+            stale += 1
+        db.commit()
+        donors = resolve_visit_donors(db, appointment_id)
+        assert {donor.code for donor in donors} == {"DN-100", "DN-240"}
+        assert {donor.id for donor in donors} == {dn100.id, dn240.id}
+        db.commit()
+    finally:
+        db.close()
+
+    api.post("/logout")
+    _login_demo_counselor(api)
+    session = api.get(f"/counselor/appointments/{appointment_id}").json()
+    assert set(session["candidate_codes"]) == {"DN-100", "DN-240"}
 
 
 def test_couple_cannot_run_counselor_report_routes(api):
@@ -352,6 +389,13 @@ def test_delete_couple_removes_shortlist_and_appointment(api):
     slot_id = api.get("/couple/book").json()["slot_ids"][0]
     booked = api.post("/couple/book", {"slot_id": str(slot_id)})
     appointment_id = int(booked.headers["location"].rsplit("/", 1)[-1])
+    db = api.session()
+    try:
+        couple_id = db.scalars(
+            select(User.id).where(User.email == "person@example.com")
+        ).one()
+    finally:
+        db.close()
     api.post("/account/delete", {"confirm": "yes"})
 
     db = api.session()
@@ -361,7 +405,16 @@ def test_delete_couple_removes_shortlist_and_appointment(api):
             is None
         )
         assert db.get(Appointment, appointment_id) is None
-        assert list(db.scalars(select(ShortlistItem))) == []
+        assert (
+            list(
+                db.scalars(
+                    select(ShortlistItem).where(
+                        ShortlistItem.couple_user_id == couple_id
+                    )
+                )
+            )
+            == []
+        )
         assert list(db.scalars(select(CandidateReport))) == []
     finally:
         db.close()

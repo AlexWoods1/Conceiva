@@ -7,8 +7,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.constants import DEFAULT_SLOT_MINUTES
+from app.constants import APPOINTMENT_BOOKED, DEFAULT_SLOT_MINUTES
 from app.models import (
+    Appointment,
+    AppointmentDonor,
     AvailabilitySlot,
     Carrier,
     CounselorProfile,
@@ -19,6 +21,7 @@ from app.models import (
     User,
 )
 from app.security import hash_password
+from app.services import add_to_shortlist, appointment_donor_ids
 
 DEMO_COUPLE_EMAIL = "couple@demo.local"
 DEMO_COUPLE_PASSWORD = "demo-couple"
@@ -209,6 +212,57 @@ def _ensure_demo_couple_intake(db: Session, couple_id: int) -> None:
         )
 
 
+def _ensure_demo_visit(db: Session, couple: User, counselor: User) -> None:
+    """Shortlist DN-100/DN-240 and book a demo visit for the counselor walkthrough."""
+    donors = {
+        donor.code: donor
+        for donor in db.scalars(
+            select(Donor).where(Donor.code.in_(("DN-100", "DN-240")))
+        )
+    }
+    dn100 = donors.get("DN-100")
+    dn240 = donors.get("DN-240")
+    if dn100 is None or dn240 is None:
+        return
+    for donor in (dn100, dn240):
+        add_to_shortlist(db, couple.id, donor.id)
+    booked = db.scalars(
+        select(Appointment).where(
+            Appointment.couple_user_id == couple.id,
+            Appointment.counselor_user_id == counselor.id,
+            Appointment.status == APPOINTMENT_BOOKED,
+        )
+    ).first()
+    if booked is None:
+        slot = db.scalars(
+            select(AvailabilitySlot)
+            .where(AvailabilitySlot.counselor_user_id == counselor.id)
+            .order_by(AvailabilitySlot.starts_at)
+        ).first()
+        if slot is None:
+            return
+        booked = Appointment(
+            couple_user_id=couple.id,
+            counselor_user_id=counselor.id,
+            slot_id=slot.id,
+            status=APPOINTMENT_BOOKED,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(booked)
+        db.flush()
+    existing_ids = set(appointment_donor_ids(db, booked.id))
+    for donor in (dn100, dn240):
+        if donor.id in existing_ids:
+            continue
+        db.add(
+            AppointmentDonor(
+                appointment_id=booked.id,
+                donor_id=donor.id,
+                donor_code=donor.code,
+            )
+        )
+
+
 def seed_demo(db: Session) -> None:
     """Insert the demo bank, donors, couple, counselor, and open slots.
 
@@ -226,8 +280,13 @@ def seed_demo(db: Session) -> None:
         _backfill_demo_motility(db)
         _backfill_demo_consent(db)
         couple = db.scalars(select(User).where(User.email == DEMO_COUPLE_EMAIL)).first()
+        counselor = db.scalars(
+            select(User).where(User.email == DEMO_COUNSELOR_EMAIL)
+        ).first()
         if couple is not None:
             _ensure_demo_couple_intake(db, couple.id)
+            if counselor is not None:
+                _ensure_demo_visit(db, couple, counselor)
         return
 
     # * Pre-consent demo logins so Vercel /tmp reseeds do not re-open the gate.
@@ -389,3 +448,4 @@ def seed_demo(db: Session) -> None:
         )
     )
     _ensure_demo_couple_intake(db, couple.id)
+    _ensure_demo_visit(db, couple, counselor)
